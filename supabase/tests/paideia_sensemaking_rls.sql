@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(35);
 
 select has_table('public', 'sessions', 'La tabla clásica sigue existiendo');
 select has_table('public', 'tool_entries', 'Las respuestas clásicas siguen existiendo');
@@ -7,6 +7,32 @@ select has_table('public', 'ps_sessions', 'Existe ps_sessions');
 select has_table('public', 'ps_members', 'Existe ps_members');
 select has_table('public', 'ps_stage_runs', 'Existe ps_stage_runs');
 select has_table('public', 'ps_responses', 'Existe ps_responses');
+select has_function('public', 'ps_end_session', array['uuid'], 'Existe la RPC segura para terminar sesiones');
+select has_function(
+  'public', 'ps_get_collective_ai_responses', array['uuid', 'uuid[]'],
+  'Existe la RPC de respuestas con consentimiento colectivo vigente'
+);
+select has_table('cron', 'job', 'La purga tiene un scheduler persistente');
+select has_index(
+  'public', 'ps_stage_runs', 'ps_stage_runs_one_active_idx',
+  'Solo puede existir una etapa activa por sesión'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.ps_sessions', 'status', 'UPDATE'),
+  'El estado de sesión no puede actualizarse directamente'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.ps_sessions', 'ended_at', 'UPDATE'),
+  'La fecha de cierre no puede posponerse desde el cliente'
+);
+select ok(
+  not has_function_privilege('public', 'public.ps_is_member(uuid)', 'EXECUTE'),
+  'PUBLIC no puede ejecutar ps_is_member'
+);
+select ok(
+  not has_function_privilege('public', 'public.ps_is_teacher(uuid)', 'EXECUTE'),
+  'PUBLIC no puede ejecutar ps_is_teacher'
+);
 
 insert into auth.users (id)
 values
