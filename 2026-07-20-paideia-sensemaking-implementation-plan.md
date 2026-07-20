@@ -11,8 +11,9 @@
 ## Política normativa de runtime de IA
 
 - `analyze_stage`, `compare_learning` y `assist_user` solo pueden llamar a OpenCode Zen mediante la allowlist privada de servidor `ZEN_FREE_MODEL_ALLOWLIST`, ordenada por capacidad operativa de mayor a menor así por defecto: `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`.
-- Antes de cada solicitud, el servidor consulta o revalida el registro de Zen sin reordenar la lista. Un candidato solo es ejecutable si su ID coincide exactamente y sus tarifas numéricas de entrada y salida son ambas exactamente `0`. Precio ausente, ambiguo o distinto de cero falla cerrado. `hy3-free` se omite hasta que su precio cero exacto sea verificable.
-- El cliente no elige ni envía un modelo. La selección ocurre antes de construir o emitir la solicitud HTTP. Si el proveedor devuelve un modelo efectivo distinto del candidato autorizado, la respuesta falla y no se presenta.
+- Antes de cada solicitud, el servidor cruza dos snapshots independientes, con antigüedad máxima de cinco minutos y sin reordenar la lista: disponibilidad por ID exacto desde `https://opencode.ai/zen/v1/models`, y costo desde `https://models.dev/api.json` en `.opencode.models[ID].cost`. El registro Zen no se usa como fuente de precio ni protocolo. Un candidato solo es ejecutable si está disponible y `cost.input`/`cost.output` son números exactamente `0`; fuente no disponible, dato ausente, snapshot vencido o desacuerdo falla cerrado para ese candidato.
+- Como defensa ante divergencia documental, el candidato también debe estar confirmado como `Free` en la tabla pública de precios de Zen. `hy3-free` sigue en la allowlist ordenada, pero se omite aunque Models.dev marque cero porque Zen lo omite de su tabla pública; solo se habilita tras confirmación autoritativa de Zen y actualización revisada del conjunto `ZEN_PUBLIC_PRICE_CONFIRMED_IDS`.
+- El cliente no elige ni envía un modelo. La selección ocurre antes de construir o emitir una solicitud de inferencia. Si el proveedor devuelve un modelo efectivo distinto del candidato autorizado, esa solicitud ya ocurrió, pero su respuesta nunca se acepta, muestra ni persiste como éxito; el fallback solo puede avanzar al siguiente candidato gratuito prevalidado.
 - Si ningún candidato es elegible o todos fallan, el servidor devuelve `FREE_MODEL_UNAVAILABLE`; la clase conserva el flujo manual sin IA. No existe fallback a GPT-5.6, OpenAI, un alias, otro proveedor ni ningún modelo pago.
 - `OPENCODE_ZEN_API_KEY` existe exclusivamente como secreto de la Supabase Edge Function. Nunca entra al frontend, Git, archivos de configuración, capturas ni logs. La facturación y el acceso pago permanecen deshabilitados como defensa adicional.
 - Los logs de ejecución contienen únicamente `operation`, modelo seleccionado/efectivo, índice de fallback, `is_free_model`, estado, hash de entrada y versión del aviso. Nunca contienen prompts, respuestas del aula, salidas del modelo, IDs persistentes ni texto sensible.
@@ -96,9 +97,9 @@ Un chat abierto ampliaría el alcance, aumentaría riesgos con menores y diluir�
 
 Algunos modelos gratuitos de Zen pueden retener o usar interacciones para mejorarlos. Por ello, la asistencia individual y el análisis colectivo tienen consentimientos separados y reversibles; el colectivo también requiere atestación docente, exclusión de no consentidores, minimización, redacción, truncamiento, seudónimos efímeros y purga.
 
-### 9. Se normaliza el transporte después de validar el modelo
+### 9. Se fija el transporte documentado después de validar el modelo
 
-El adaptador elige el transporte compatible únicamente después de seleccionar un candidato gratuito con precio cero verificado. Ninguna rama de transporte habilita GPT-5.6, OpenAI o un modelo pago.
+El registro Zen no contiene metadatos de transporte. Los cuatro IDs de la allowlist se asignan explícitamente al endpoint documentado `https://opencode.ai/zen/v1/chat/completions`; `hy3-free` no se ejecuta hasta que Zen confirme también su precio/ruta. Ninguna rama habilita GPT-5.6, OpenAI o un modelo pago.
 
 ### 10. No se presupone soporte uniforme de JSON estructurado
 
@@ -1470,60 +1471,111 @@ git commit -m "feat: orchestrate schema-driven classroom stages"
 **Interfaces**
 
 ```ts
-listZenModels(apiKey: string): Promise<ZenModel[]>
-selectFreeModels(models, orderedAllowlist): ZenModel[]
-callZenFreeModel(input): Promise<unknown>
+type Snapshot<T> = { fetchedAt: number; data: T };
+
+listZenModelIds(): Promise<Snapshot<Set<string>>>
+listOpenCodeModelCosts(): Promise<Snapshot<Record<string, ModelCost>>>
+selectFreeModels(input: {
+  availability: Snapshot<Set<string>>;
+  costs: Snapshot<Record<string, ModelCost>>;
+  orderedAllowlist: string[];
+  zenPublicPriceConfirmedIds: Set<string>;
+  now: number;
+}): string[]
+callZenChatCompletion(input): Promise<unknown>
 extractJsonObject(raw): unknown
 ```
 
 - [ ] **Paso 1: escribir pruebas de selección**
 
 ```ts
-Deno.test("selectFreeModels conserva orden y exige ambos precios en cero", () => {
-  const models = [
-    { id: "mimo-v2.5-free", pricing: { input: 0, output: 0 } },
-    { id: "nemotron-3-ultra-free", pricing: { input: 0, output: 0 } },
-  ];
+Deno.test("selectFreeModels cruza disponibilidad y costo sin reordenar", () => {
+  const now = Date.now();
+  const availability = {
+    fetchedAt: now,
+    data: new Set(["mimo-v2.5-free", "hy3-free", "nemotron-3-ultra-free"]),
+  };
+  const costs = {
+    fetchedAt: now,
+    data: {
+      "nemotron-3-ultra-free": { input: 0, output: 0 },
+      "hy3-free": { input: 0, output: 0 },
+      "mimo-v2.5-free": { input: 0, output: 0 },
+    },
+  };
 
   assertEquals(
-    selectFreeModels(models, [
-      "nemotron-3-ultra-free",
-      "hy3-free",
-      "deepseek-v4-flash-free",
-      "mimo-v2.5-free",
-    ]).map((model) => model.id),
+    selectFreeModels({
+      availability,
+      costs,
+      orderedAllowlist: [
+        "nemotron-3-ultra-free",
+        "hy3-free",
+        "deepseek-v4-flash-free",
+        "mimo-v2.5-free",
+      ],
+      zenPublicPriceConfirmedIds: new Set([
+        "nemotron-3-ultra-free",
+        "deepseek-v4-flash-free",
+        "mimo-v2.5-free",
+      ]),
+      now,
+    }),
     ["nemotron-3-ultra-free", "mimo-v2.5-free"],
   );
 });
 
-Deno.test("selectFreeModels falla cerrado ante precio ausente o no cero", () => {
-  const models = [
-    { id: "hy3-free", pricing: { input: 0 } },
-    { id: "deepseek-v4-flash-free", pricing: { input: 0, output: 1 } },
-  ];
-
-  assertEquals(selectFreeModels(models, ["hy3-free", "deepseek-v4-flash-free"]), []);
+Deno.test("selectFreeModels falla cerrado ante snapshot vencido", () => {
+  const now = Date.now();
+  assertEquals(selectFreeModels({
+    availability: { fetchedAt: now - 300_001, data: new Set(["nemotron-3-ultra-free"]) },
+    costs: { fetchedAt: now, data: { "nemotron-3-ultra-free": { input: 0, output: 0 } } },
+    orderedAllowlist: ["nemotron-3-ultra-free"],
+    zenPublicPriceConfirmedIds: new Set(["nemotron-3-ultra-free"]),
+    now,
+  }), []);
 });
 ```
 
 - [ ] **Paso 2: implementar la selección única free-only**
 
-Criterio de gratuidad:
+Fuentes y criterio:
 
 ```ts
-function isFreeModel(model: ZenModel): boolean {
-  return typeof model.pricing?.input === "number"
-    && typeof model.pricing?.output === "number"
-    && model.pricing.input === 0
-    && model.pricing.output === 0;
+const MAX_SNAPSHOT_AGE_MS = 5 * 60 * 1000;
+const ZEN_PUBLIC_PRICE_CONFIRMED_IDS = new Set([
+  "nemotron-3-ultra-free",
+  "deepseek-v4-flash-free",
+  "mimo-v2.5-free",
+]);
+
+function hasExactZeroCost(cost?: ModelCost): boolean {
+  return typeof cost?.input === "number"
+    && typeof cost?.output === "number"
+    && cost.input === 0
+    && cost.output === 0;
 }
 ```
 
-`ZEN_FREE_MODEL_ALLOWLIST` solo existe en servidor y su valor por defecto es `nemotron-3-ultra-free,hy3-free,deepseek-v4-flash-free,mimo-v2.5-free`. Intersectar el registro con la allowlist sin reordenarla. El sufijo `-free` no prueba gratuidad. Omitir `hy3-free` mientras falte precio exacto de entrada o salida. Si la intersección elegible queda vacía, devolver `FREE_MODEL_UNAVAILABLE` antes de crear una solicitud HTTP.
+`listZenModelIds` obtiene únicamente `data[].id` desde `https://opencode.ai/zen/v1/models`. `listOpenCodeModelCosts` obtiene por separado `.opencode.models[ID].cost` desde `https://models.dev/api.json`, la fuente de metadatos de proveedor documentada por OpenCode. No leer `pricing`, costo, endpoint ni protocolo del registro Zen porque no los expone.
+
+`ZEN_FREE_MODEL_ALLOWLIST` solo existe en servidor y su valor por defecto es `nemotron-3-ultra-free,hy3-free,deepseek-v4-flash-free,mimo-v2.5-free`. Conservar como máximo cinco minutos los dos snapshots, cada uno con `fetchedAt`; si una actualización falla, solo se admite un snapshot aún vigente. Fuente no disponible, JSON/campo ausente, snapshot vencido, costo no numérico/no cero o desacuerdo omite el candidato. `ZEN_PUBLIC_PRICE_CONFIRMED_IDS` requiere revisión de la tabla oficial de Zen y excluye `hy3-free` hasta que Zen confirme explícitamente precio y ruta. Si la intersección queda vacía, devolver `FREE_MODEL_UNAVAILABLE` antes de crear una solicitud de inferencia.
 
 - [ ] **Paso 3: implementar el único transporte autorizado**
 
-Solo después de seleccionar un candidato gratuito verificado, usar el protocolo que el registro indique para ese candidato, por ejemplo:
+El registro Zen no decide el transporte. Usar un mapa fijo y revisado para los cuatro IDs:
+
+```ts
+const ZEN_CHAT_COMPLETIONS_URL = "https://opencode.ai/zen/v1/chat/completions";
+const ZEN_CHAT_COMPLETIONS_IDS = new Set([
+  "nemotron-3-ultra-free",
+  "hy3-free",
+  "deepseek-v4-flash-free",
+  "mimo-v2.5-free",
+]);
+```
+
+Solo después de prevalidar el candidato, llamar:
 
 ```text
 POST https://opencode.ai/zen/v1/chat/completions
@@ -1531,7 +1583,7 @@ Authorization: Bearer ${OPENCODE_ZEN_API_KEY}
 Content-Type: application/json
 ```
 
-No implementar una rama para GPT-5.6, OpenAI, aliases ni modelos fuera de allowlist. El cliente nunca incluye `model`. Tras la respuesta, comprobar que el modelo efectivo devuelto coincide exactamente con el candidato; si difiere, marcar el intento fallido y avanzar solo al siguiente candidato elegible.
+No implementar una rama para GPT-5.6, OpenAI, aliases ni modelos fuera de allowlist. El cliente nunca incluye `model`. `hy3-free` permanece bloqueado por `ZEN_PUBLIC_PRICE_CONFIRMED_IDS` pese a estar en el mapa. Tras la respuesta, comprobar que el modelo efectivo devuelto coincide exactamente con el candidato. Un mismatch ocurre después de una llamada: descartar la respuesta, marcar el intento fallido —nunca `succeeded`— y avanzar solo al siguiente candidato que ya estaba prevalidado; nunca mostrar ni persistir el cuerpo como resultado.
 
 - [ ] **Paso 4: normalizar texto**
 
@@ -1554,11 +1606,15 @@ export function extractText(body: unknown): string {
 3. Ante error, realizar una sola llamada de reparación con el mismo candidato y el mensaje de validación.
 4. Si vuelve a fallar, guardar `INVALID_MODEL_OUTPUT` y no mostrar contenido parcial.
 
-El fallback avanza en orden ante `404/410`, `429`, timeout, `5xx`, modelo efectivo distinto o salida inválida tras reparación. Al agotarse devuelve `FREE_MODEL_UNAVAILABLE`; nunca amplía la lista.
+El fallback avanza en orden ante `404/410`, `429`, timeout, `5xx`, modelo efectivo distinto o salida inválida tras reparación. Cada avance usa únicamente la lista prevalidada del mismo ciclo; no reinterpreta el error como autorización para ampliar candidatos. Al agotarse devuelve `FREE_MODEL_UNAVAILABLE`.
 
 - [ ] **Paso 6: ejecutar pruebas**
 
-Además de las pruebas anteriores, ejecutar la misma tabla para `analyze_stage`, `compare_learning` y `assist_user` con un `fetch` falso para demostrar: lista vacía, candidato fuera de lista, precio ausente/no cero y `hy3-free` no verificado producen **cero** llamadas HTTP; el orden de intentos es el configurado; un modelo efectivo diferente se rechaza; y el agotamiento nunca llama a un modelo pago.
+Además de las pruebas anteriores, ejecutar la misma tabla para `analyze_stage`, `compare_learning` y `assist_user` con un `fetch` falso y contadores separados:
+
+- **Preselección:** candidato fuera de allowlist, ID no disponible, costo ausente/no numérico/no cero, snapshot ausente/vencido, desacuerdo documental y `hy3-free` no confirmado producen cero llamadas a `/zen/v1/chat/completions`. Las consultas de metadatos se cuentan aparte.
+- **Postrespuesta:** un modelo efectivo diferente implica una llamada de inferencia, pero la respuesta nunca se acepta, muestra ni persiste como `succeeded`; el siguiente intento, si existe, usa exactamente el siguiente candidato de la lista ya prevalidada.
+- El orden de inferencia es el configurado y el agotamiento nunca llama a un modelo pago.
 
 ```bash
 npm run test:edge
@@ -1600,7 +1656,7 @@ La función deberá recorrer objetos y arreglos, redactar PII y truncar únicame
 
 - [ ] **Paso 2: implementar reserva atómica**
 
-El orden obligatorio de la Edge Function es: autenticar y autorizar → verificar atestación/consentimiento → cargar, minimizar, redactar y calcular hash → obtener candidatos gratuitos elegibles → seleccionar el primer candidato → reservar la ejecución → emitir la llamada. Si falla cualquier paso previo a la selección, no se crea una llamada de inferencia.
+El orden obligatorio de la Edge Function es: autenticar y autorizar → verificar atestación/consentimiento → cargar, minimizar, redactar y calcular hash → obtener snapshots vigentes de IDs Zen y costos Models.dev → cruzar con allowlist/confirmación pública → seleccionar el primer candidato → reservar la ejecución → emitir la llamada. Si falla cualquier paso de preselección, no se crea una llamada de inferencia.
 
 Crear RPC `ps_reserve_ai_run` que:
 
@@ -2194,23 +2250,15 @@ npx supabase functions deploy paideia-ai
 
 - [ ] **Paso 4: verificar modelos configurados**
 
-Añadir un comando administrativo local:
-
-```bash
-curl -sS https://opencode.ai/zen/v1/models \
-  -H "Authorization: Bearer $OPENCODE_ZEN_API_KEY"
-```
-
-Verificar la allowlist en este orden:
+Repetir sin API key el comando exacto de Gate 0 en `docs/superpowers/plans/2026-07-20-paideia-sensemaking-preimplementation.md`, que consulta por separado:
 
 ```text
-nemotron-3-ultra-free
-hy3-free
-deepseek-v4-flash-free
-mimo-v2.5-free
+https://opencode.ai/zen/v1/models     -> disponibilidad por ID exacto
+https://models.dev/api.json           -> .opencode.models[ID].cost
+https://opencode.ai/docs/zen          -> confirmación Free y ruta pública
 ```
 
-Para cada candidato ejecutable, verificar tarifas numéricas exactas `input=0` y `output=0`; el ID o sufijo nunca es suficiente. Omitir `hy3-free` hasta que ambas tarifas sean verificables. Si ninguno califica, la comprobación falla y la función debe devolver `FREE_MODEL_UNAVAILABLE` sin emitir una inferencia.
+Resultado esperado actual, en orden: `nemotron-3-ultra-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`. `hy3-free` debe quedar omitido mientras Zen no lo publique, aunque Models.dev marque cero. Confirmar además que el adaptador usa el mapa fijo a `https://opencode.ai/zen/v1/chat/completions`, que ambos snapshots vencen a los cinco minutos y que simular fuente ausente, stale, incompleta o contradictoria produce `FREE_MODEL_UNAVAILABLE` sin llamada de inferencia cuando no queda candidato.
 
 - [ ] **Paso 5: configurar GitHub Pages**
 
@@ -2353,8 +2401,10 @@ Comprobar:
 
 - La clave Zen no aparece en `dist/`.
 - El cliente no puede elegir arbitrariamente un modelo.
-- Las tres operaciones rechazan candidatos fuera de allowlist, con precio ausente/no cero o con modelo efectivo distinto.
-- Las rutas rechazadas no emiten una llamada HTTP y el fallback conserva el orden configurado.
+- Las tres operaciones cruzan ID disponible desde Zen con costo exacto desde Models.dev; no leen precio ni protocolo del registro Zen y rechazan snapshots ausentes, vencidos o contradictorios.
+- Los rechazos de preselección —fuera de allowlist, no disponible, costo ausente/no cero o `hy3-free` no confirmado— emiten cero llamadas de inferencia.
+- Un modelo efectivo distinto se detecta después de una llamada, pero su respuesta nunca se acepta, muestra ni persiste como éxito; el fallback conserva el orden y usa solo el siguiente candidato ya prevalidado.
+- Todo candidato permitido usa el mapa fijo de Chat Completions; no existe transporte derivado del registro.
 - La Edge Function no recibe texto libre del cliente para análisis colectivo.
 - El análisis colectivo está desactivado sin atestación y consentimiento separado; respuestas no consentidas quedan fuera.
 - Las solicitudes repetidas devuelven la ejecución existente.
@@ -2376,6 +2426,7 @@ Comprobar:
 
 - Circuito completo en dos dispositivos.
 - Análisis, comparación y asistencia registran únicamente un modelo permitido y verificado en el orden correcto.
+- Disponibilidad Zen y costo Models.dev provienen de snapshots independientes, vigentes y coincidentes; la confirmación pública de Zen excluye `hy3-free` mientras siga omitido.
 - Ningún request se dirige a GPT-5.6, OpenAI, un modelo pago, un alias o un proveedor alternativo.
 - El modelo efectivo coincide con el candidato solicitado, los logs contienen solo metadatos permitidos y no hay prompts/respuestas.
 - Consentimiento, exclusión, redacción, truncamiento, alias efímeros y purga de 24 horas pasan sus pruebas.

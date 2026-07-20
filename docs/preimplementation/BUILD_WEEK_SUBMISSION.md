@@ -12,7 +12,7 @@ Paideia Sensemaking helps secondary-school teachers turn live classroom evidence
 
 Paideia Sensemaking is a teacher-controlled classroom feedback loop for secondary Spanish Language classes. Students respond to an initial speech-act case from their own devices. The deployed server analyzes consented, minimized evidence with the first verified-free model in a private OpenCode Zen fallback list, identifies patterns and limitations, and proposes editable teaching moves. The teacher chooses the intervention, students apply a three-column frame—what was said, what the speaker attempted to do, and what effect it produced—and then solve a new transfer case. The same free-only policy compares the before-and-after evidence, while the teacher keeps the final decision. If no verified-free model is available, Paideia continues with a manual no-AI flow. The system never grades students automatically.
 
-Development provenance: Paideia Sensemaking was built with Codex using GPT-5.6, as required by Build Week. Runtime: the deployed product never calls GPT-5.6, OpenAI or a paid model.
+Development provenance: Paideia Sensemaking was built with Codex using GPT-5.6, as required by Build Week. Runtime: the deployed product never calls GPT-5.6, OpenAI or a paid model. “Verified-free” requires exact ID availability from Zen, exact zero input/output costs from OpenCode provider metadata, and matching public Zen pricing confirmation; ambiguous candidates fail closed.
 
 ## Judging case
 

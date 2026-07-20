@@ -50,9 +50,11 @@
 - [ ] OpenCode Zen key held outside Git and available to the execution shell.
 - [ ] `OPENCODE_ZEN_API_KEY` is stored only as a Supabase Edge Function secret; it never enters frontend configuration, Git or logs.
 - [ ] Zen billing and paid-model access remain disabled as defense in depth.
-- [ ] Ordered server allowlist is `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`; each executable candidate has exact zero input/output prices.
-- [ ] `hy3-free` remains skipped until Zen exposes exact zero input/output prices; missing or ambiguous pricing fails closed.
-- [ ] Selection tests prove the order and prove that rejected, non-free and differently returned models cause no provider request or accepted result.
+- [ ] Ordered server allowlist is `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`; availability comes only from exact IDs in `https://opencode.ai/zen/v1/models`, while exact numeric zero input/output cost comes separately from `.opencode.models[ID].cost` in `https://models.dev/api.json`.
+- [ ] Both source snapshots are available and no older than five minutes; missing, stale or disagreeing evidence fails closed. The Zen registry is not treated as price or protocol metadata.
+- [ ] Zen's public docs also confirm each enabled candidate as Free on the fixed Chat Completions route. `hy3-free` remains skipped because those docs omit it, even though Models.dev currently reports zero.
+- [ ] Preselection tests prove that outside-allowlist, unavailable, missing/non-zero-cost, stale and unconfirmed-Hy3 candidates produce zero inference HTTP calls.
+- [ ] Postresponse tests prove that a differently returned model follows an inference request but its response is never accepted, displayed or persisted as success; fallback may use only the next already-prevalidated free candidate.
 
 ## Product contract
 
@@ -61,7 +63,7 @@
 - Problem: the teacher sees answers but cannot quickly distinguish literal reading, communicative intention and produced effect.
 - Promise: Paideia turns consented, de-identified and minimized classroom evidence into an editable intervention and then checks transfer on a new case.
 - Teacher authority: AI proposes evidence, limitations and options; it never grades or advances the class autonomously.
-- Runtime policy: `analyze_stage`, `compare_learning` and `assist_user` use the same server-owned free-only fallback. The client cannot select a model; an exhausted list returns `FREE_MODEL_UNAVAILABLE` and preserves the manual no-AI flow. No paid fallback exists.
+- Runtime policy: `analyze_stage`, `compare_learning` and `assist_user` use the same server-owned free-only fallback, with fresh independent availability/cost checks and a fixed Chat Completions route map. The client cannot select a model; an exhausted list returns `FREE_MODEL_UNAVAILABLE` and preserves the manual no-AI flow. No paid fallback exists.
 - Golden path: create session + teacher attestation → join + participant consent → activate initial case → answer → analyze with the first verified-free Zen model → edit/activate three-column intervention → answer transfer case → compare with the same policy → teacher decides.
 - Acceptance evidence: two browsers complete the golden path; analysis cites synthetic responses; comparison distinguishes observed change from remaining uncertainty.
 - Build Week submission cut: the golden path, free-only Zen analysis/comparison/assistance, secure data isolation, deployment and submission assets.

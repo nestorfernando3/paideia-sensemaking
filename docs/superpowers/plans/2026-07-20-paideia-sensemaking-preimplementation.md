@@ -18,7 +18,8 @@
 - No se guardan claves, tokens, contraseñas, datos de menores ni respuestas reales en Git, Obsidian, capturas o logs.
 - La facturación de Zen permanecerá deshabilitada como defensa adicional. El runtime no solicita GPT-5.6, OpenAI ni ningún modelo pago bajo ninguna condición.
 - `OPENCODE_ZEN_API_KEY` existe solo como secreto de la Edge Function: nunca se incluye en frontend, Git, archivos, capturas ni logs.
-- `analyze_stage`, `compare_learning` y `assist_user` usan la misma allowlist privada y ordenada: `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`. Cada candidato requiere tarifas exactas de entrada y salida iguales a cero; un precio ausente o ambiguo falla cerrado. `hy3-free` se omite hasta que ese precio cero exacto sea verificable.
+- `analyze_stage`, `compare_learning` y `assist_user` usan la misma allowlist privada y ordenada: `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`. La disponibilidad se verifica por ID exacto en `https://opencode.ai/zen/v1/models`; el costo se verifica por separado en `https://models.dev/api.json` bajo `.opencode.models[ID].cost`. Ambos snapshots deben estar disponibles y vigentes, y entrada/salida deben ser números exactamente cero. El registro Zen no contiene precio ni protocolo.
+- `hy3-free` se omite aunque Models.dev marque costo cero porque la tabla pública de precios/rutas de Zen todavía lo omite; cualquier ausencia, vencimiento o desacuerdo falla cerrado. Los demás IDs confirmados usan el endpoint fijo documentado `/zen/v1/chat/completions`.
 - El cliente no elige ni envía un modelo. Si la lista se agota, el servidor devuelve `FREE_MODEL_UNAVAILABLE`, no llama a otro proveedor y conserva el flujo manual sin IA.
 - El análisis colectivo externo empieza desactivado, requiere atestación docente y consentimiento separado y reversible por participante; excluye respuestas no consentidas, minimiza y redacta PII, trunca texto y usa seudónimos efímeros por ejecución. La demo usa solo datos sintéticos.
 - La preparación pedagógica usa únicamente datos sintéticos identificados como `S01`, `S02`, etc.
@@ -343,17 +344,34 @@ Expected result: the existing Paideia Supabase project is visible to the authent
 Run:
 
 ```bash
-curl -fsSL https://opencode.ai/zen/v1/models \
-  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const order=["nemotron-3-ultra-free","hy3-free","deepseek-v4-flash-free","mimo-v2.5-free"];const rows=JSON.parse(s).data;const eligible=order.filter(id=>{const m=rows.find(x=>x.id===id);return m&&typeof m.pricing?.input==="number"&&typeof m.pricing?.output==="number"&&m.pricing.input===0&&m.pricing.output===0});if(!eligible.length)process.exit(1);console.log(`verified free fallback: ${eligible.join(", ")}`)})'
+set -e
+node -e '
+const fs=require("node:fs");
+const [zenPath,metadataPath,docsPath]=process.argv.slice(1);
+const order=["nemotron-3-ultra-free","hy3-free","deepseek-v4-flash-free","mimo-v2.5-free"];
+const display={"nemotron-3-ultra-free":"Nemotron 3 Ultra Free","deepseek-v4-flash-free":"DeepSeek V4 Flash Free","mimo-v2.5-free":"MiMo-V2.5 Free"};
+const available=new Set(JSON.parse(fs.readFileSync(zenPath,"utf8")).data.map(x=>x.id));
+const metadata=JSON.parse(fs.readFileSync(metadataPath,"utf8")).opencode?.models;
+const docs=fs.readFileSync(docsPath,"utf8");
+const confirmed=id=>display[id]
+  && docs.includes(`<tr><td>${display[id]}</td><td>Free</td><td>Free</td>`)
+  && docs.includes(`<tr><td>${display[id]}</td><td>${id}</td><td><code dir="auto">https://opencode.ai/zen/v1/chat/completions</code>`);
+const zero=id=>{const c=metadata?.[id]?.cost;return typeof c?.input==="number"&&typeof c?.output==="number"&&c.input===0&&c.output===0};
+const eligible=order.filter(id=>available.has(id)&&zero(id)&&confirmed(id));
+if(!eligible.length)process.exit(1);
+console.log(`verified free fallback: ${eligible.join(", ")}`);
+' <(curl -fsSL https://opencode.ai/zen/v1/models) \
+  <(curl -fsSL https://models.dev/api.json) \
+  <(curl -fsSL https://opencode.ai/docs/zen)
 ```
 
 Expected result:
 
 ```text
-verified free fallback: <one or more allowlisted IDs, in configured order>
+verified free fallback: nemotron-3-ultra-free, deepseek-v4-flash-free, mimo-v2.5-free
 ```
 
-Un sufijo `-free` no basta. Todo candidato con precio de entrada o salida ausente, ambiguo o distinto de cero se omite. En particular, omitir `hy3-free` hasta que Zen publique exactamente ambos precios en cero.
+El primer `curl` prueba solo disponibilidad por ID; el segundo prueba costo exacto en los metadatos de proveedor usados por OpenCode; el tercero exige confirmación coincidente en la tabla pública de Zen. Ninguna fuente sustituye a otra. Un error HTTP/JSON, campo ausente o costo distinto de cero omite el candidato; si la cadena queda vacía, el comando falla. `hy3-free` se omite deliberadamente porque Zen aún no lo confirma públicamente, aunque Models.dev reporte cero.
 
 - [ ] **Step 6: verify secret custody**
 
@@ -372,8 +390,9 @@ In the OpenCode Zen dashboard:
 1. Confirm that the API key belongs to the active workspace.
 2. Keep paid access and billing disabled.
 3. Confirm the server allowlist is ordered exactly as documented and cannot be overridden by the client.
-4. Keep a candidate enabled only after verifying exact zero input/output prices and reviewing its current data-retention notice.
-5. Confirm `OPENCODE_ZEN_API_KEY` will be stored only as a Supabase Edge Function secret and never in frontend configuration, Git or logs.
+4. Verify availability from the Zen model-ID registry and exact zero input/output cost separately from Models.dev; keep snapshots no older than five minutes and fail closed on unavailable, missing, stale or disagreeing data.
+5. Confirm each enabled candidate also appears as Free with the fixed Chat Completions route in Zen's public documentation; keep `hy3-free` disabled while omitted.
+6. Review the current data-retention notice and confirm `OPENCODE_ZEN_API_KEY` will be stored only as a Supabase Edge Function secret and never in frontend configuration, Git or logs.
 
 Expected result: the runtime can use at least one verified-free Zen candidate and cannot spend money or fall back to a paid model.
 
@@ -401,7 +420,8 @@ Append to `docs/preimplementation/BUILD_WEEK_READINESS.md`, checking each item o
 - [ ] Deno available for Edge Function tests.
 - [ ] OpenCode Zen key held outside Git and available to the execution shell.
 - [ ] Zen billing and paid-model access remain disabled as defense in depth.
-- [ ] At least one allowlisted model has exact zero input/output prices; candidates retain the configured order and `hy3-free` is skipped until exactly verified.
+- [ ] At least one allowlisted ID is present in the Zen registry, has exact numeric zero input/output cost in `.opencode.models[ID].cost` from Models.dev, and has matching Free/Chat Completions confirmation in Zen's public docs; sources are fresh and agree.
+- [ ] `hy3-free` remains in its ranked position but is skipped while Zen's public pricing/routing docs omit it, even though Models.dev currently reports zero.
 - [ ] `OPENCODE_ZEN_API_KEY` is held only in the Edge Function's server-side secrets.
 - [ ] Collective external analysis is default-off and its teacher attestation, separate reversible participant consent and manual no-AI alternative are documented.
 ```
@@ -717,6 +737,9 @@ node -e 'const f=require("./docs/preimplementation/fixtures/speech-acts-classroo
 rg -n 'Deadline: 2026-07-21|Track: Education|Build Week submission cut|Internal submission deadline' \
   docs/preimplementation/BUILD_WEEK_READINESS.md
 rg -n 'nemotron-3-ultra-free.*hy3-free.*deepseek-v4-flash-free.*mimo-v2.5-free|FREE_MODEL_UNAVAILABLE|billing.*disabled|facturaci.n.*deshabilitada' \
+  docs/preimplementation/BUILD_WEEK_READINESS.md \
+  2026-07-20-paideia-sensemaking-implementation-plan.md
+rg -n 'models.dev/api.json|opencode.models\[ID\].cost|chat/completions|Preselection|Preselección|Postresponse|Postrespuesta' \
   docs/preimplementation/BUILD_WEEK_READINESS.md \
   2026-07-20-paideia-sensemaking-implementation-plan.md
 ! rg -n 'ZEN_REASONING_MODEL|ZEN_USER_MODEL|analy[sz].*GPT-5\.6|GPT-5\.6.*compar' \
