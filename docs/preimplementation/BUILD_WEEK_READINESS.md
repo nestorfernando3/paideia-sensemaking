@@ -29,3 +29,9 @@
 - [ ] Synthetic fixture parses successfully.
 - [ ] Submission schedule and owners are explicit.
 - [ ] Handoff and Wiki reflect the verified state.
+
+## Verified Devpost draft evidence
+
+- Submission ID: `1106114`
+- Education was saved and verified on 2026-07-20.
+- The final submission was not sent; the entry remains a draft.
