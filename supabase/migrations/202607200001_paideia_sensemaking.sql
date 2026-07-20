@@ -335,7 +335,7 @@ begin
   from public.ps_sessions s
   where s.id = a.session_id
     and s.status = 'ended'
-    and s.ended_at <= p_as_of - interval '23 hours'
+    and s.ended_at <= p_as_of - interval '24 hours'
     and nullif(btrim(s.retention_obligation), '') is null
     and a.result is not null;
   get diagnostics cleared_ai_results = row_count;
@@ -344,7 +344,7 @@ begin
   using public.ps_sessions s
   where s.id = r.session_id
     and s.status = 'ended'
-    and s.ended_at <= p_as_of - interval '23 hours'
+    and s.ended_at <= p_as_of - interval '24 hours'
     and nullif(btrim(s.retention_obligation), '') is null;
   get diagnostics deleted_responses = row_count;
 

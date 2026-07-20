@@ -1,5 +1,32 @@
 begin;
-select plan(51);
+select plan(54);
+
+select ok(
+  position(
+    'interval ''23 hours''' in pg_get_functiondef(
+      'public.ps_purge_expired_session_data(timestamptz)'::regprocedure
+    )
+  ) > 0,
+  'La migración incremental redefine la purga con umbral de 23 horas'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.ps_get_collective_ai_responses(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'authenticated no puede ejecutar la extracción colectiva'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.ps_get_collective_ai_responses(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'service_role puede ejecutar la extracción colectiva'
+);
 
 insert into auth.users (id)
 values
@@ -33,7 +60,7 @@ values
     '00000000-0000-0000-0000-000000000113', 'JOINCC',
     '00000000-0000-0000-0000-000000000011', '10', 'Purga vencida',
     'Purgar evidencia vencida', 'Eliminar después del umbral seguro',
-    'ended', '2026-07-19 11:59:00+00', null, false, null, null
+    'ended', '2026-07-19 12:59:00+00', null, false, null, null
   ),
   (
     '00000000-0000-0000-0000-000000000114', 'JOINDD',
@@ -292,8 +319,8 @@ select throws_ok(
       '00000000-0000-0000-0000-000000000111',
       array['00000000-0000-0000-0000-000000000211'::uuid]
     )$$,
-  'P0001', 'TEACHER_REQUIRED',
-  'Un estudiante no puede recuperar evidencia colectiva'
+  '42501', 'permission denied for function ps_get_collective_ai_responses',
+  'authenticated no puede recuperar evidencia colectiva'
 );
 
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000011';
@@ -316,6 +343,10 @@ select is(
   'closed',
   'La activación serializada cierra la etapa anterior'
 );
+
+reset role;
+set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 
 create temporary table collective_result on commit drop as
 select * from public.ps_get_collective_ai_responses(
@@ -359,6 +390,9 @@ select is(
   'La RPC excluye consentimientos de otra versión'
 );
 
+reset role;
+set local role authenticated;
+set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000013';
 
 select lives_ok(
@@ -369,7 +403,9 @@ select lives_ok(
   'El participante puede retirar su consentimiento'
 );
 
-set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000011';
+reset role;
+set local role service_role;
+set local request.jwt.claim.role = 'service_role';
 
 select is(
   (select count(*) from public.ps_get_collective_ai_responses(
@@ -427,6 +463,10 @@ select throws_ok(
   'No se pueden activar etapas después del cierre'
 );
 
+reset role;
+set local role service_role;
+set local request.jwt.claim.role = 'service_role';
+
 select is(
   (select count(*) from public.ps_get_collective_ai_responses(
     '00000000-0000-0000-0000-000000000111',
@@ -436,6 +476,9 @@ select is(
   'Una sesión cerrada no produce nuevas inclusiones externas'
 );
 
+reset role;
+set local role authenticated;
+set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000013';
 
 select throws_ok(
@@ -520,19 +563,19 @@ select * from public.ps_purge_expired_session_data('2026-07-20 12:00:00+00');
 select is(
   (select cleared_ai_results from hardening_purge_result),
   2::bigint,
-  'La purga horaria limpia resultados elegibles desde las 23 horas'
+  'La purga horaria limpia resultados elegibles a las 23h01'
 );
 
 select is(
   (select deleted_responses from hardening_purge_result),
   2::bigint,
-  'La purga horaria elimina respuestas elegibles desde las 23 horas'
+  'La purga horaria elimina respuestas elegibles a las 23h01'
 );
 
 select is(
   (select count(*) from public.ps_responses where id = '00000000-0000-0000-0000-000000000315'),
   0::bigint,
-  'La evidencia vencida se elimina'
+  'La evidencia con 23h01 se elimina'
 );
 
 select is(

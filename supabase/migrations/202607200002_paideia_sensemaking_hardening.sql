@@ -1,5 +1,167 @@
 create extension if not exists pg_cron;
 
+-- Normalize rows accepted by 001 before validating stricter invariants.
+-- A recorded end timestamp wins over an active flag; a missing timestamp on an
+-- ended session falls back to created_at so retention is never postponed.
+update public.ps_sessions
+set status = 'ended'
+where status = 'active'
+  and ended_at is not null;
+
+update public.ps_sessions
+set ended_at = created_at
+where status = 'ended'
+  and ended_at is null;
+
+-- Invalid notice configuration is disabled. No consent or attestation is
+-- fabricated during upgrade.
+update public.ps_sessions
+set allow_free_ai_assistance = false
+where allow_free_ai_assistance
+  and nullif(btrim(ai_disclosure_version), '') is null;
+
+update public.ps_sessions
+set allow_collective_external_ai = false
+where allow_collective_external_ai
+  and (
+    collective_ai_attested_at is null
+    or nullif(btrim(collective_ai_notice_version), '') is null
+  );
+
+update public.ps_members
+set collective_external_ai_consent_at = null,
+    collective_external_ai_consent_version = null,
+    collective_external_ai_consent_revoked_at = null
+where collective_external_ai_consent_at is null
+   or nullif(btrim(collective_external_ai_consent_version), '') is null;
+
+-- A stage whose creator is not a member has no safe owner. Delete only that
+-- ps_* stage; existing cascade rules remove its dependent ps_* artifacts.
+delete from public.ps_stage_runs stage
+where not exists (
+  select 1
+  from public.ps_members member
+  where member.session_id = stage.session_id
+    and member.user_id = stage.created_by
+);
+
+-- Required cross-session rows cannot be repaired without inventing ownership.
+delete from public.ps_responses response
+where not exists (
+  select 1
+  from public.ps_stage_runs stage
+  where stage.id = response.stage_run_id
+    and stage.session_id = response.session_id
+);
+
+delete from public.ps_ai_runs ai_run
+where not exists (
+  select 1
+  from public.ps_members member
+  where member.session_id = ai_run.session_id
+    and member.user_id = ai_run.requested_by
+);
+
+-- Optional cross-session references are nulled instead of deleting the row.
+update public.ps_ai_runs ai_run
+set stage_run_id = null
+where stage_run_id is not null
+  and not exists (
+    select 1
+    from public.ps_stage_runs stage
+    where stage.id = ai_run.stage_run_id
+      and stage.session_id = ai_run.session_id
+  );
+
+update public.ps_ai_runs ai_run
+set subject_user_id = null
+where subject_user_id is not null
+  and not exists (
+    select 1
+    from public.ps_members member
+    where member.session_id = ai_run.session_id
+      and member.user_id = ai_run.subject_user_id
+  );
+
+delete from public.ps_teacher_decisions decision
+where not exists (
+    select 1
+    from public.ps_stage_runs stage
+    where stage.id = decision.source_stage_run_id
+      and stage.session_id = decision.session_id
+  )
+  or not exists (
+    select 1
+    from public.ps_members member
+    where member.session_id = decision.session_id
+      and member.user_id = decision.teacher_user_id
+  );
+
+update public.ps_teacher_decisions decision
+set source_ai_run_id = null
+where source_ai_run_id is not null
+  and not exists (
+    select 1
+    from public.ps_ai_runs ai_run
+    where ai_run.id = decision.source_ai_run_id
+      and ai_run.session_id = decision.session_id
+  );
+
+update public.ps_teacher_decisions decision
+set activated_stage_run_id = null
+where activated_stage_run_id is not null
+  and not exists (
+    select 1
+    from public.ps_stage_runs stage
+    where stage.id = decision.activated_stage_run_id
+      and stage.session_id = decision.session_id
+  );
+
+update public.ps_sessions session
+set active_stage_run_id = null
+where active_stage_run_id is not null
+  and not exists (
+    select 1
+    from public.ps_stage_runs stage
+    where stage.id = session.active_stage_run_id
+      and stage.session_id = session.id
+      and stage.status = 'active'
+  );
+
+update public.ps_stage_runs stage
+set status = 'closed',
+    closed_at = coalesce(stage.closed_at, session.ended_at, stage.created_at)
+from public.ps_sessions session
+where session.id = stage.session_id
+  and session.status = 'ended'
+  and stage.status = 'active';
+
+update public.ps_sessions
+set active_stage_run_id = null
+where status = 'ended';
+
+-- Preserve the explicitly selected active stage when possible; otherwise keep
+-- the earliest stage deterministically and close only the duplicates.
+with ranked_active_stages as (
+  select stage.id,
+         row_number() over (
+           partition by stage.session_id
+           order by
+             (stage.id = session.active_stage_run_id) desc,
+             stage.sequence_number,
+             stage.id
+         ) as active_rank
+  from public.ps_stage_runs stage
+  join public.ps_sessions session on session.id = stage.session_id
+  where stage.status = 'active'
+)
+update public.ps_stage_runs stage
+set status = 'closed',
+    closed_at = coalesce(stage.closed_at, now())
+from ranked_active_stages ranked
+where ranked.id = stage.id
+  and ranked.active_rank > 1;
+
 alter table public.ps_sessions
   add constraint ps_sessions_status_ended_at_check check (
     (status = 'active' and ended_at is null)
@@ -245,6 +407,39 @@ begin
 end;
 $$;
 
+-- 001 used a 24-hour threshold. The hourly job below needs a 23-hour
+-- threshold so execution occurs in [23h, 24h) regardless of scheduler phase.
+create or replace function public.ps_purge_expired_session_data(
+  p_as_of timestamptz default now()
+)
+returns table (cleared_ai_results bigint, deleted_responses bigint)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.ps_ai_runs ai_run
+  set result = null
+  from public.ps_sessions session
+  where session.id = ai_run.session_id
+    and session.status = 'ended'
+    and session.ended_at <= p_as_of - interval '23 hours'
+    and nullif(btrim(session.retention_obligation), '') is null
+    and ai_run.result is not null;
+  get diagnostics cleared_ai_results = row_count;
+
+  delete from public.ps_responses response
+  using public.ps_sessions session
+  where session.id = response.session_id
+    and session.status = 'ended'
+    and session.ended_at <= p_as_of - interval '23 hours'
+    and nullif(btrim(session.retention_obligation), '') is null;
+  get diagnostics deleted_responses = row_count;
+
+  return next;
+end;
+$$;
+
 create or replace function public.ps_get_collective_ai_responses(
   p_session_id uuid,
   p_stage_run_ids uuid[]
@@ -291,13 +486,14 @@ revoke update on public.ps_sessions from authenticated;
 revoke execute on function public.ps_is_member(uuid) from public;
 revoke execute on function public.ps_is_teacher(uuid) from public;
 revoke execute on function public.ps_end_session(uuid) from public;
-revoke execute on function public.ps_get_collective_ai_responses(uuid, uuid[]) from public;
+revoke execute on function public.ps_get_collective_ai_responses(uuid, uuid[])
+from public, authenticated;
 
 grant execute on function public.ps_is_member(uuid) to authenticated, service_role;
 grant execute on function public.ps_is_teacher(uuid) to authenticated, service_role;
 grant execute on function public.ps_end_session(uuid) to authenticated;
 grant execute on function public.ps_get_collective_ai_responses(uuid, uuid[])
-to authenticated, service_role;
+to service_role;
 
 do $$
 declare
