@@ -22,7 +22,7 @@
 ## Gate 0
 
 - [ ] OpenAI Build Week draft exists and is linked to Paideia Sensemaking.
-- [ ] Independent GitHub remote exists and `main` is published.
+- [x] Independent GitHub remote exists and `main` is published.
 - [ ] Product and demo contracts are frozen.
 - [ ] Required accounts and local runtimes are available.
 - [ ] Legacy Supabase baseline is recorded without exporting row data.

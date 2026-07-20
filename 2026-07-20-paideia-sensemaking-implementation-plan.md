@@ -372,7 +372,7 @@ type UserAssistance = {
 - Scripts `test`, `test:watch`, `test:edge`, `test:db`, `verify`.
 - Primera prueba automática.
 
-- [ ] **Paso 1: duplicar conservando historial y sin tocar el original**
+- [x] **Paso 1: duplicar conservando historial y sin tocar el original**
 
 ```bash
 git clone https://github.com/nestorfernando3/paideia.git paideia-sensemaking
@@ -394,7 +394,7 @@ origin   https://github.com/nestorfernando3/paideia-sensemaking.git
 upstream https://github.com/nestorfernando3/paideia.git
 ```
 
-- [ ] **Paso 2: impedir pushes accidentales a upstream**
+- [x] **Paso 2: impedir pushes accidentales a upstream**
 
 ```bash
 git remote set-url --push upstream DISABLED
