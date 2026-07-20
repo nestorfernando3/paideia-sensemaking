@@ -5,9 +5,9 @@
   "description": "Παιδεία — Suite de herramientas pedagógicas inspirada en la filosofía griega",
   "license": "MIT",
   "author": "Nestor Fernando De Leon Llanos",
-  "homepage": "https://github.com/nestorfernando3/paideia",
+  "homepage": "https://github.com/nestorfernando3/paideia-sensemaking",
   "bugs": {
-    "url": "https://github.com/nestorfernando3/paideia/issues"
+    "url": "https://github.com/nestorfernando3/paideia-sensemaking/issues"
   },
   "keywords": [
     "education",
@@ -21,7 +21,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/nestorfernando3/paideia.git"
+    "url": "https://github.com/nestorfernando3/paideia-sensemaking.git"
   },
   "type": "module",
   "main": "electron/main.js",
