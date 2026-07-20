@@ -1,5 +1,5 @@
 {
-  "name": "paideia",
+  "name": "paideia-sensemaking",
   "private": true,
   "version": "1.4.0",
   "description": "Παιδεία — Suite de herramientas pedagógicas inspirada en la filosofía griega",
@@ -29,6 +29,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:edge": "deno test --allow-env --allow-net supabase/functions/paideia-ai/tests",
+    "test:db": "supabase test db",
+    "verify": "npm run test && npm run build",
     "serve:local": "node server/index.mjs",
     "start:local": "npm run build && node server/index.mjs",
     "electron:dev": "npm run build && electron .",
@@ -36,9 +42,13 @@
     "dist:win": "npm run build && electron-builder --win"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
-    "vite": "^5.4.0"
+    "jsdom": "^25.0.1",
+    "supabase": "^2.39.2",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.56.1",
