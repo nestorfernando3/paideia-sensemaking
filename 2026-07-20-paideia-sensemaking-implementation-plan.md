@@ -4,9 +4,21 @@
 
 **Objetivo:** construir `nestorfernando3/paideia-sensemaking` como una evolución independiente de Paideia que permita a docentes de Lengua Castellana dirigir una clase presencial, observar el proceso de aprendizaje en tiempo real, obtener una interpretación pedagógica sustentada en evidencia, escoger una intervención y comprobar si produjo una transformación conceptual.
 
-**Arquitectura:** duplicar el repositorio original en un repositorio GitHub independiente, conservar `nestorfernando3/paideia` como remoto `upstream` de solo lectura y reutilizar el mismo proyecto Supabase mediante tablas nuevas con prefijo `ps_`. El navegador gestiona la interacción y la sincronización en tiempo real; una Supabase Edge Function autentica las solicitudes y se comunica con OpenCode Zen. GPT-5.6 realiza el análisis pedagógico colectivo y la comparación antes/después. Un modelo gratuito de Zen responde al usuario mediante ayudas breves, contextualizadas y no calificadoras.
+**Arquitectura:** duplicar el repositorio original en un repositorio GitHub independiente, conservar `nestorfernando3/paideia` como remoto `upstream` de solo lectura y reutilizar el mismo proyecto Supabase mediante tablas nuevas con prefijo `ps_`. El navegador gestiona la interacción y la sincronización en tiempo real; una Supabase Edge Function autentica las solicitudes y usa una única cadena de fallback de modelos gratuitos verificados de OpenCode Zen para análisis, comparación y asistencia. El proyecto se construye con Codex usando GPT-5.6; el runtime desplegado nunca llama a GPT-5.6, OpenAI ni modelos pagos.
 
-**Stack:** Vite 5, JavaScript modular sin framework, CSS existente de Paideia, Supabase Anonymous Auth/Postgres/Realtime/Edge Functions, TypeScript/Deno para Edge Functions, OpenCode Zen API, GPT-5.6 Terra, un modelo Zen gratuito configurable, Vitest + jsdom, Supabase CLI y GitHub Actions.
+**Stack:** Vite 5, JavaScript modular sin framework, CSS existente de Paideia, Supabase Anonymous Auth/Postgres/Realtime/Edge Functions, TypeScript/Deno para Edge Functions, OpenCode Zen API con runtime free-only, Codex con GPT-5.6 para desarrollo, Vitest + jsdom, Supabase CLI y GitHub Actions.
+
+## Política normativa de runtime de IA
+
+- `analyze_stage`, `compare_learning` y `assist_user` solo pueden llamar a OpenCode Zen mediante la allowlist privada de servidor `ZEN_FREE_MODEL_ALLOWLIST`, ordenada por capacidad operativa de mayor a menor así por defecto: `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`.
+- Antes de cada solicitud, el servidor consulta o revalida el registro de Zen sin reordenar la lista. Un candidato solo es ejecutable si su ID coincide exactamente y sus tarifas numéricas de entrada y salida son ambas exactamente `0`. Precio ausente, ambiguo o distinto de cero falla cerrado. `hy3-free` se omite hasta que su precio cero exacto sea verificable.
+- El cliente no elige ni envía un modelo. La selección ocurre antes de construir o emitir la solicitud HTTP. Si el proveedor devuelve un modelo efectivo distinto del candidato autorizado, la respuesta falla y no se presenta.
+- Si ningún candidato es elegible o todos fallan, el servidor devuelve `FREE_MODEL_UNAVAILABLE`; la clase conserva el flujo manual sin IA. No existe fallback a GPT-5.6, OpenAI, un alias, otro proveedor ni ningún modelo pago.
+- `OPENCODE_ZEN_API_KEY` existe exclusivamente como secreto de la Supabase Edge Function. Nunca entra al frontend, Git, archivos de configuración, capturas ni logs. La facturación y el acceso pago permanecen deshabilitados como defensa adicional.
+- Los logs de ejecución contienen únicamente `operation`, modelo seleccionado/efectivo, índice de fallback, `is_free_model`, estado, hash de entrada y versión del aviso. Nunca contienen prompts, respuestas del aula, salidas del modelo, IDs persistentes ni texto sensible.
+- El análisis colectivo externo empieza desactivado. Requiere atestación docente de aprobación institucional y autorización aplicable, más consentimiento separado, versionado y reversible por participante. `free_ai_consent_at` sigue siendo exclusivo de `assist_user`; nunca se reutiliza como consentimiento colectivo.
+- Las respuestas sin consentimiento colectivo vigente permanecen disponibles para la clase, pero se excluyen de todo payload externo y de nuevas salidas de análisis/comparación. El servidor recupera solo etapas necesarias, minimiza campos, redacta PII, trunca límites aprobados y reemplaza IDs por seudónimos aleatorios efímeros por `ai_run`; el mapa existe solo en memoria.
+- No se persisten payloads, prompts, mapas de alias ni texto completo en logs. Las respuestas, resultados de IA y extractos se purgan a más tardar 24 horas después del cierre, salvo obligación institucional documentada. La demo y el envío usan únicamente datos sintéticos. Si la institución no acepta los términos de retención/uso del proveedor, se usa el flujo manual sin IA.
 
 ## Restricciones globales
 
@@ -30,20 +42,16 @@
 - Intervención MVP: tres columnas —“Qué se dijo”, “Qué se intentó hacer” y “Qué efecto produjo”—.
 - Verificación MVP: caso nuevo de transferencia más justificación breve.
 - Las actividades serán declarativas y renderizadas por esquema; no se creará una vista diferente para cada tema.
-- El ciclo principal usa dos operaciones GPT-5.6: `analyze_stage` y `compare_learning`.
-- La respuesta directa al usuario usa `assist_user` con un modelo gratuito de Zen.
-- `assist_user` no podrá usar silenciosamente un modelo pago. Si no hay modelo gratuito habilitado, devolverá `FREE_MODEL_UNAVAILABLE`.
-- Los modelos gratuitos no reciben respuestas de otros estudiantes ni análisis colectivos.
+- Las tres operaciones de runtime —`analyze_stage`, `compare_learning` y `assist_user`— usan exclusivamente la política free-only anterior.
+- `assist_user` recibe solo contexto autorizado del solicitante; análisis y comparación reciben únicamente respuestas con consentimiento colectivo vigente.
 - El estudiante solo podrá solicitar ayudas acotadas: `hint`, `rephrase` y `example`. No se implementará chat general ilimitado en el MVP.
 - El docente podrá solicitar `rewrite_instruction` con el mismo asistente gratuito.
 - La ayuda al estudiante no entregará la respuesta final ni realizará la actividad por él.
 - La asistencia gratuita estará desactivada por defecto. El docente deberá habilitarla al crear la sesión después de leer la advertencia de tratamiento externo.
 - Antes del primer uso, el estudiante deberá aceptar el aviso de asistencia externa de esa sesión.
 - Se permitirán como máximo tres ayudas gratuitas por estudiante y etapa.
-- La lista de modelos Zen deberá consultarse y validarse; no se codificará la disponibilidad permanente de ningún modelo gratuito.
-- El modelo de razonamiento por defecto será `gpt-5.6-terra`.
-- El modelo gratuito se configurará con `ZEN_USER_MODEL`; ejemplo inicial: `deepseek-v4-flash-free`.
-- Todas las respuestas de IA persistirán el modelo realmente utilizado, la operación, el estado, el hash de entrada y si el modelo fue gratuito.
+- La lista de modelos Zen deberá consultarse y validarse; no se presumirá disponibilidad ni gratuidad permanente por nombre o sufijo.
+- Todas las respuestas de IA persistirán el modelo seleccionado y efectivo, índice de fallback, operación, estado, hash de entrada, versión del aviso y `is_free_model=true`.
 - No se guardará el prompt completo enviado al proveedor; solo versión de prompt, hash y metadatos.
 - Las solicitudes de IA serán idempotentes para impedir cobros duplicados por doble clic o reintentos.
 - El modo LAN existente podrá seguir funcionando para las herramientas clásicas, pero mostrará que las funciones de IA requieren conexión.
@@ -72,13 +80,13 @@ La aplicación actual valida en el navegador una cadena literal. Cualquier usuar
 
 “Analizar” y “proponer una intervención” no necesitan llamadas separadas. `analyze_stage` devolverá patrones, evidencias, limitaciones y opciones ejecutables en una sola respuesta. `compare_learning` medirá el cambio tras la intervención.
 
-### 5. Se corrige el papel de los modelos gratuitos
+### 5. Se unifica el runtime en modelos gratuitos verificados
 
-La propuesta anterior los colocaba como modelos de desarrollo o respaldo. Eso no coincide con la intención del producto. Ahora los modelos gratuitos alimentan `assist_user`, es decir, las respuestas visibles para el docente o el estudiante. GPT-5.6 queda a cargo de las decisiones de alto razonamiento pedagógico.
+`analyze_stage`, `compare_learning` y `assist_user` comparten una sola allowlist ordenada y privada de servidor. GPT-5.6 se conserva únicamente como procedencia de construcción con Codex y no procesa datos en el producto desplegado.
 
 ### 6. No habrá sustitución silenciosa de modelos
 
-Si el modelo gratuito deja de estar disponible, Paideia no usará GPT-5.6 y generará gastos sin autorización. Mostrará una indisponibilidad clara y permitirá al administrador escoger otro modelo gratuito válido.
+Si la cadena gratuita se agota, Paideia devuelve `FREE_MODEL_UNAVAILABLE`, no emite una llamada paga y mantiene la actividad manual. El cliente no puede escoger ni alterar el modelo.
 
 ### 7. Se limita el asistente para evitar un chatbot genérico
 
@@ -86,11 +94,11 @@ Un chat abierto ampliaría el alcance, aumentaría riesgos con menores y diluir�
 
 ### 8. Se incorpora la advertencia de privacidad de los modelos gratuitos
 
-Algunos modelos gratuitos de Zen pueden retener o usar interacciones para mejorar sus modelos. Por ello, la asistencia gratuita será opt-in, no recibirá información de terceros, anonimizará los datos y mostrará una advertencia previa.
+Algunos modelos gratuitos de Zen pueden retener o usar interacciones para mejorarlos. Por ello, la asistencia individual y el análisis colectivo tienen consentimientos separados y reversibles; el colectivo también requiere atestación docente, exclusión de no consentidores, minimización, redacción, truncamiento, seudónimos efímeros y purga.
 
-### 9. Se normalizan dos protocolos de Zen
+### 9. Se normaliza el transporte después de validar el modelo
 
-Los modelos GPT-5.6 usan el endpoint Responses; los modelos gratuitos actuales usan Chat Completions. El adaptador tendrá dos transportes y una salida interna común.
+El adaptador elige el transporte compatible únicamente después de seleccionar un candidato gratuito con precio cero verificado. Ninguna rama de transporte habilita GPT-5.6, OpenAI o un modelo pago.
 
 ### 10. No se presupone soporte uniforme de JSON estructurado
 
@@ -124,7 +132,7 @@ El MVP estará terminado cuando cumpla, de principio a fin, esta secuencia:
 4. Todos los dispositivos muestran la actividad activa mediante Realtime.
 5. Cada estudiante envía una respuesta.
 6. El docente observa participación y solicita `analyze_stage`.
-7. El servidor verifica el rol docente, carga respuestas, anonimiza, redacta PII y llama a GPT-5.6.
+7. El servidor verifica rol, atestación y consentimientos; excluye respuestas no consentidas, minimiza, redacta PII, crea seudónimos efímeros y llama al primer candidato gratuito verificado.
 8. La interfaz presenta resumen, patrones, evidencias, limitaciones, disposición para avanzar y opciones pedagógicas.
 9. El docente selecciona y puede editar la intervención de tres columnas.
 10. Paideia activa la intervención en todos los dispositivos.
@@ -132,11 +140,11 @@ El MVP estará terminado cuando cumpla, de principio a fin, esta secuencia:
 12. El docente activa un caso nuevo de transferencia con justificación.
 13. Los estudiantes responden.
 14. El docente solicita `compare_learning`.
-15. GPT-5.6 devuelve cambios observados, dificultades persistentes, evidencias y recomendación de avanzar o reforzar.
+15. La misma política gratuita devuelve cambios observados, dificultades persistentes, evidencias y recomendación de avanzar o reforzar.
 16. El docente conserva la decisión final.
 17. Cuando la asistencia gratuita está habilitada, un estudiante puede pedir una pista, reformulación o ejemplo sobre su actividad actual.
-18. `assist_user` utiliza exclusivamente un modelo gratuito válido y solo contexto autorizado del usuario solicitante.
-19. La interfaz informa el modelo realmente usado y nunca oculta una sustitución.
+18. `assist_user` utiliza la misma allowlist gratuita y solo contexto autorizado del usuario solicitante.
+19. La interfaz informa el modelo realmente usado; una respuesta que declare otro modelo se rechaza.
 20. Finalizar la sesión modifica únicamente datos `ps_*`.
 
 ---
@@ -601,6 +609,10 @@ create table public.ps_sessions (
   active_stage_run_id uuid,
   allow_free_ai_assistance boolean not null default false,
   ai_disclosure_version text,
+  allow_collective_external_ai boolean not null default false,
+  collective_ai_attested_at timestamptz,
+  collective_ai_notice_version text,
+  retention_obligation text,
   created_at timestamptz not null default now(),
   ended_at timestamptz
 );
@@ -611,6 +623,9 @@ create table public.ps_members (
   role text not null check (role in ('teacher', 'student')),
   display_name text not null check (char_length(display_name) between 1 and 80),
   free_ai_consent_at timestamptz,
+  collective_external_ai_consent_at timestamptz,
+  collective_external_ai_consent_version text,
+  collective_external_ai_consent_revoked_at timestamptz,
   joined_at timestamptz not null default now(),
   primary key (session_id, user_id)
 );
@@ -663,8 +678,10 @@ create table public.ps_ai_runs (
   provider text not null default 'opencode_zen',
   requested_model text not null,
   used_model text,
-  is_free_model boolean,
+  fallback_index integer not null check (fallback_index >= 0),
+  is_free_model boolean not null check (is_free_model = true),
   prompt_version text not null,
+  notice_version text not null,
   input_hash text not null,
   status text not null default 'pending' check (
     status in ('pending', 'running', 'succeeded', 'failed')
@@ -740,6 +757,9 @@ create or replace function public.ps_create_session(
   p_success_criteria text,
   p_allow_free_ai_assistance boolean,
   p_ai_disclosure_version text,
+  p_allow_collective_external_ai boolean,
+  p_collective_ai_notice_version text,
+  p_teacher_attests_authorization boolean,
   p_initial_activity jsonb
 )
 returns public.ps_sessions
@@ -755,6 +775,11 @@ begin
     raise exception 'AUTH_REQUIRED';
   end if;
 
+  if coalesce(p_allow_collective_external_ai, false)
+    and p_teacher_attests_authorization is not true then
+    raise exception 'COLLECTIVE_AI_ATTESTATION_REQUIRED';
+  end if;
+
   insert into public.ps_sessions (
     join_code,
     owner_user_id,
@@ -763,7 +788,10 @@ begin
     learning_objective,
     success_criteria,
     allow_free_ai_assistance,
-    ai_disclosure_version
+    ai_disclosure_version,
+    allow_collective_external_ai,
+    collective_ai_attested_at,
+    collective_ai_notice_version
   )
   values (
     upper(p_join_code),
@@ -773,7 +801,10 @@ begin
     p_learning_objective,
     p_success_criteria,
     p_allow_free_ai_assistance,
-    case when p_allow_free_ai_assistance then p_ai_disclosure_version else null end
+    case when p_allow_free_ai_assistance then p_ai_disclosure_version else null end,
+    coalesce(p_allow_collective_external_ai, false),
+    case when p_allow_collective_external_ai then now() else null end,
+    case when p_allow_collective_external_ai then p_collective_ai_notice_version else null end
   )
   returning * into created_session;
 
@@ -978,7 +1009,7 @@ with check (
 );
 
 grant execute on function public.ps_create_session(
-  text, text, text, text, text, text, boolean, text, jsonb
+  text, text, text, text, text, text, boolean, text, boolean, text, boolean, jsonb
 ) to authenticated;
 grant execute on function public.ps_join_session(text, text) to authenticated;
 grant execute on function public.ps_activate_stage(uuid) to authenticated;
@@ -990,6 +1021,8 @@ alter publication supabase_realtime add table public.ps_responses;
 ```
 
 La implementación deberá envolver los `alter publication` en comprobaciones de existencia, igual que el esquema clásico, para que la migración sea idempotente en entornos rehechos.
+
+La migración debe añadir una función programable de purga que elimine `ps_responses`, `ps_ai_runs.result` y extractos asociados a más tardar 24 horas del cierre de la sesión, salvo que `retention_obligation` documente una obligación institucional. Consentimiento retirado invalida cualquier nueva inclusión externa, no elimina la respuesta del flujo local de clase.
 
 - [ ] **Paso 5: aplicar y probar**
 
@@ -1264,7 +1297,7 @@ git commit -m "feat: add isolated realtime sensemaking repository"
 - Formulario de creación pedagógicamente suficiente.
 - Ingreso seguro por RPC.
 - Rol derivado de `ps_members`.
-- Configuración explícita de asistencia gratuita.
+- Configuración explícita e independiente de asistencia individual y análisis colectivo externo.
 
 - [ ] **Paso 1: escribir una prueba que prohíba la cadena heredada**
 
@@ -1293,6 +1326,8 @@ Objetivo de aprendizaje
 Criterio de éxito
 Pregunta inicial
 [ ] Habilitar ayudas con un modelo gratuito externo
+[ ] Habilitar análisis colectivo externo con modelos gratuitos
+[ ] Atestiguo que la institución aprobó proveedor, modelos y retención, y que obtendré las autorizaciones y asentimientos aplicables
 ```
 
 Cuando se marque la casilla, mostrar:
@@ -1300,8 +1335,10 @@ Cuando se marque la casilla, mostrar:
 ```text
 Las solicitudes de ayuda se procesarán con un modelo externo gratuito.
 No escribas nombres, correos, teléfonos ni información sensible.
-Algunos proveedores gratuitos pueden usar interacciones anonimizadas para mejorar sus modelos.
+Algunos proveedores gratuitos pueden retener o usar contenido desidentificado para mejorar sus modelos. El texto libre aún puede revelar identidad; no escribas datos personales.
 ```
+
+La segunda casilla comienza desmarcada y no puede activarse sin la atestación. Su aviso nombra OpenCode Zen, el modelo que seleccione el servidor, los datos mínimos enviados, posible retención/uso del proveedor, alternativa manual y retiro. Cada participante acepta o rechaza por separado `collective_external_ai_consent`; rechazar o retirar nunca bloquea la clase y excluye sus respuestas de futuras solicitudes externas.
 
 - [ ] **Paso 3: crear la actividad inicial**
 
@@ -1320,6 +1357,8 @@ const initialActivity = {
 No confiar en un valor arbitrario guardado en `sessionStorage`. Guardar únicamente el `sessionId`; al cargar, consultar `ps_members` para el `auth.uid()` actual y derivar `teacher` o `student`.
 
 - [ ] **Paso 5: probar**
+
+Las pruebas deben demostrar que ambos modos nacen desactivados, que el consentimiento individual no habilita el colectivo y que falta de atestación impide activar análisis colectivo.
 
 ```bash
 npm run test -- tests/unit/newSession.test.js
@@ -1432,67 +1471,59 @@ git commit -m "feat: orchestrate schema-driven classroom stages"
 
 ```ts
 listZenModels(apiKey: string): Promise<ZenModel[]>
-assertReasoningModelAvailable(models, modelId): ZenModel
-selectFreeUserModel(models, configuredModelId): ZenModel
-callZenResponses(input): Promise<unknown>
-callZenChatCompletions(input): Promise<unknown>
+selectFreeModels(models, orderedAllowlist): ZenModel[]
+callZenFreeModel(input): Promise<unknown>
 extractJsonObject(raw): unknown
 ```
 
 - [ ] **Paso 1: escribir pruebas de selección**
 
 ```ts
-Deno.test("selectFreeUserModel rechaza modelos pagos", () => {
+Deno.test("selectFreeModels conserva orden y exige ambos precios en cero", () => {
   const models = [
-    { id: "gpt-5.6-terra", pricing: { input: 2.5, output: 15 } },
-  ];
-
-  assertThrows(
-    () => selectFreeUserModel(models, "gpt-5.6-terra"),
-    Error,
-    "FREE_MODEL_REQUIRED",
-  );
-});
-
-Deno.test("selectFreeUserModel acepta un modelo gratuito disponible", () => {
-  const models = [
-    { id: "deepseek-v4-flash-free", pricing: { input: 0, output: 0 } },
+    { id: "mimo-v2.5-free", pricing: { input: 0, output: 0 } },
+    { id: "nemotron-3-ultra-free", pricing: { input: 0, output: 0 } },
   ];
 
   assertEquals(
-    selectFreeUserModel(models, "deepseek-v4-flash-free").id,
-    "deepseek-v4-flash-free",
+    selectFreeModels(models, [
+      "nemotron-3-ultra-free",
+      "hy3-free",
+      "deepseek-v4-flash-free",
+      "mimo-v2.5-free",
+    ]).map((model) => model.id),
+    ["nemotron-3-ultra-free", "mimo-v2.5-free"],
   );
+});
+
+Deno.test("selectFreeModels falla cerrado ante precio ausente o no cero", () => {
+  const models = [
+    { id: "hy3-free", pricing: { input: 0 } },
+    { id: "deepseek-v4-flash-free", pricing: { input: 0, output: 1 } },
+  ];
+
+  assertEquals(selectFreeModels(models, ["hy3-free", "deepseek-v4-flash-free"]), []);
 });
 ```
 
-- [ ] **Paso 2: implementar selección sin fallback pago**
+- [ ] **Paso 2: implementar la selección única free-only**
 
 Criterio de gratuidad:
 
 ```ts
 function isFreeModel(model: ZenModel): boolean {
-  return model.id.endsWith("-free")
-    || (
-      Number(model.pricing?.input ?? 1) === 0
-      && Number(model.pricing?.output ?? 1) === 0
-    );
+  return typeof model.pricing?.input === "number"
+    && typeof model.pricing?.output === "number"
+    && model.pricing.input === 0
+    && model.pricing.output === 0;
 }
 ```
 
-Si `ZEN_USER_MODEL` no existe o no es gratuito, lanzar `FREE_MODEL_UNAVAILABLE`.
+`ZEN_FREE_MODEL_ALLOWLIST` solo existe en servidor y su valor por defecto es `nemotron-3-ultra-free,hy3-free,deepseek-v4-flash-free,mimo-v2.5-free`. Intersectar el registro con la allowlist sin reordenarla. El sufijo `-free` no prueba gratuidad. Omitir `hy3-free` mientras falte precio exacto de entrada o salida. Si la intersección elegible queda vacía, devolver `FREE_MODEL_UNAVAILABLE` antes de crear una solicitud HTTP.
 
-- [ ] **Paso 3: implementar transportes**
+- [ ] **Paso 3: implementar el único transporte autorizado**
 
-Para `gpt-5.6-*`, usar:
-
-```text
-POST https://opencode.ai/zen/v1/responses
-Authorization: Bearer ${OPENCODE_ZEN_API_KEY}
-Content-Type: application/json
-```
-
-Para el modelo gratuito seleccionado, usar:
+Solo después de seleccionar un candidato gratuito verificado, usar el protocolo que el registro indique para ese candidato, por ejemplo:
 
 ```text
 POST https://opencode.ai/zen/v1/chat/completions
@@ -1500,15 +1531,12 @@ Authorization: Bearer ${OPENCODE_ZEN_API_KEY}
 Content-Type: application/json
 ```
 
+No implementar una rama para GPT-5.6, OpenAI, aliases ni modelos fuera de allowlist. El cliente nunca incluye `model`. Tras la respuesta, comprobar que el modelo efectivo devuelto coincide exactamente con el candidato; si difiere, marcar el intento fallido y avanzar solo al siguiente candidato elegible.
+
 - [ ] **Paso 4: normalizar texto**
 
 ```ts
-export function extractText(protocol: "responses" | "chat", body: unknown): string {
-  if (protocol === "responses") {
-    const response = body as { output_text?: string };
-    if (typeof response.output_text === "string") return response.output_text;
-  }
-
+export function extractText(body: unknown): string {
   const chat = body as {
     choices?: Array<{ message?: { content?: string } }>;
   };
@@ -1519,16 +1547,18 @@ export function extractText(protocol: "responses" | "chat", body: unknown): stri
 }
 ```
 
-La implementación final también deberá soportar el arreglo `output[].content[]` del protocolo Responses cuando `output_text` no venga incluido.
-
 - [ ] **Paso 5: implementar JSON validado y una reparación**
 
 1. Extraer el primer objeto JSON completo.
 2. Validar con el esquema de operación.
-3. Ante error, realizar una sola llamada de reparación con el mensaje de validación.
+3. Ante error, realizar una sola llamada de reparación con el mismo candidato y el mensaje de validación.
 4. Si vuelve a fallar, guardar `INVALID_MODEL_OUTPUT` y no mostrar contenido parcial.
 
+El fallback avanza en orden ante `404/410`, `429`, timeout, `5xx`, modelo efectivo distinto o salida inválida tras reparación. Al agotarse devuelve `FREE_MODEL_UNAVAILABLE`; nunca amplía la lista.
+
 - [ ] **Paso 6: ejecutar pruebas**
+
+Además de las pruebas anteriores, ejecutar la misma tabla para `analyze_stage`, `compare_learning` y `assist_user` con un `fetch` falso para demostrar: lista vacía, candidato fuera de lista, precio ausente/no cero y `hy3-free` no verificado producen **cero** llamadas HTTP; el orden de intentos es el configurado; un modelo efectivo diferente se rechaza; y el agotamiento nunca llama a un modelo pago.
 
 ```bash
 npm run test:edge
@@ -1543,7 +1573,7 @@ git commit -m "feat: add protocol-aware OpenCode Zen adapter"
 
 ---
 
-## Tarea 8: implementar autorización, anonimización e idempotencia de la Edge Function
+## Tarea 8: implementar autorización, minimización e idempotencia de la Edge Function
 
 **Archivos**
 
@@ -1561,13 +1591,16 @@ git commit -m "feat: add protocol-aware OpenCode Zen adapter"
 - Carga de datos en servidor.
 - Reserva idempotente.
 - Límites de uso.
+- Atestación y consentimientos separados para datos colectivos.
 - Cero service role en cliente.
 
 - [ ] **Paso 1: escribir pruebas de redacción profunda**
 
-La función deberá recorrer objetos y arreglos y redactar únicamente strings. Debe reemplazar IDs reales por alias locales `learner_01`, `learner_02`.
+La función deberá recorrer objetos y arreglos, redactar PII y truncar únicamente strings. Después de redacción, debe reemplazar IDs reales por alias aleatorios locales `learner_01`, `learner_02`, etc. generados de nuevo para cada `ai_run`; el mapa vive solo en memoria y nunca se persiste, registra, envía al navegador ni reutiliza.
 
 - [ ] **Paso 2: implementar reserva atómica**
+
+El orden obligatorio de la Edge Function es: autenticar y autorizar → verificar atestación/consentimiento → cargar, minimizar, redactar y calcular hash → obtener candidatos gratuitos elegibles → seleccionar el primer candidato → reservar la ejecución → emitir la llamada. Si falla cualquier paso previo a la selección, no se crea una llamada de inferencia.
 
 Crear RPC `ps_reserve_ai_run` que:
 
@@ -1587,11 +1620,18 @@ compare_learning   -> teacher
 assist_user        -> member; teacher para rewrite_instruction
 ```
 
+Antes de seleccionar modelo o emitir HTTP:
+
+- `analyze_stage` y `compare_learning` exigen `allow_collective_external_ai=true`, atestación docente vigente y versión de aviso vigente;
+- incluyen solo participantes con `collective_external_ai_consent_at` vigente y sin retiro;
+- `assist_user` exige su propio `free_ai_consent_at`, que no habilita análisis colectivo;
+- ausencia o retiro de consentimiento conserva la respuesta local y el flujo manual, pero la excluye del payload externo.
+
 - [ ] **Paso 4: cargar información según mínimo privilegio**
 
-`analyze_stage` recibe respuestas de la etapa completa.
+`analyze_stage` recibe solo respuestas consentidas de la etapa necesaria.
 
-`compare_learning` recibe respuestas de la etapa inicial y de transferencia.
+`compare_learning` recibe solo respuestas consentidas de la etapa inicial y de transferencia.
 
 `assist_user` recibe:
 
@@ -1600,7 +1640,7 @@ assist_user        -> member; teacher para rewrite_instruction
 - respuesta del solicitante, cuando exista;
 - intención solicitada.
 
-Nunca recibe miembros, nombres, respuestas ajenas ni análisis colectivo.
+Nunca recibe miembros, nombres, `auth.uid`, correos, códigos, metadatos de dispositivo, respuestas ajenas ni análisis colectivo. Ninguna operación envía nombres, display names o identificadores persistentes. Si la redacción/minimización no puede completarse, fallar cerrado sin llamada al proveedor.
 
 - [ ] **Paso 5: impedir prompt injection**
 
@@ -1616,22 +1656,26 @@ El bloque se enviará como JSON serializado entre marcadores `BEGIN_DATA` y `END
 
 - [ ] **Paso 6: no registrar contenido sensible**
 
-Los logs permitidos son:
+Los únicos campos permitidos en logs son:
 
 ```json
 {
   "operation": "assist_user",
-  "sessionId": "uuid",
-  "aiRunId": "uuid",
-  "requestedModel": "deepseek-v4-flash-free",
-  "durationMs": 840,
-  "status": "succeeded"
+  "selectedModel": "deepseek-v4-flash-free",
+  "effectiveModel": "deepseek-v4-flash-free",
+  "fallbackIndex": 2,
+  "isFreeModel": true,
+  "status": "succeeded",
+  "inputHash": "sha256",
+  "noticeVersion": "2026-07-20"
 }
 ```
 
-No registrar prompts, respuestas de estudiantes ni salida completa del modelo.
+No registrar prompts, respuestas de estudiantes, salida del modelo, IDs persistentes, alias ni otros campos. `result` es dato funcional protegido por RLS y sujeto a la purga de 24 horas; no es log.
 
 - [ ] **Paso 7: ejecutar pruebas Edge y DB**
+
+Las pruebas deben cubrir: colectivo desactivado; atestación ausente; consentimientos individual/colectivo no intercambiables; exclusión de respuestas sin consentimiento o retirado; PII, truncamiento y alias efímeros; fallo de redacción sin HTTP; logs sin contenido; y purga a más tardar 24 horas tras cierre salvo obligación documentada.
 
 ```bash
 npm run test:edge
@@ -1666,7 +1710,7 @@ git commit -m "feat: secure and rate-limit server-side AI execution"
 
 - [ ] **Paso 1: crear fixture inicial**
 
-`tests/fixtures/speechActs.js` contendrá al menos doce respuestas anonimizadas repartidas entre:
+`tests/fixtures/speechActs.js` contendrá al menos doce respuestas sintéticas, marcadas como tales y sin nombres ni datos de contacto, repartidas entre:
 
 - lectura literal;
 - intención correctamente inferida;
@@ -1836,7 +1880,7 @@ git commit -m "feat: turn classroom analysis into teacher-controlled action"
 
 - Asistente visible para estudiantes y docentes.
 - Modelos gratuitos como motor de respuesta al usuario.
-- Opt-in, consentimiento, límites y degradación segura.
+- Opt-in individual separado, límites y degradación segura.
 
 - [ ] **Paso 1: escribir pruebas de disponibilidad**
 
@@ -1925,10 +1969,14 @@ El servidor es la fuente de verdad; el contador del cliente es solo informativo.
 
 - qué se envía;
 - qué nunca se envía;
-- que algunos modelos gratuitos pueden usar datos anonimizados para mejora;
+- que algunos modelos gratuitos pueden retener o usar contenido desidentificado para mejora y que el texto libre puede seguir revelando identidad;
 - cómo desactivar la función;
 - que la actividad sigue funcionando sin IA;
 - que la institución debe revisar sus obligaciones antes de un despliegue real con menores.
+- que el análisis colectivo externo está desactivado por defecto y requiere atestación docente y consentimiento separado, versionado y reversible por participante;
+- que respuestas no consentidas se excluyen, que se minimizan/redactan/truncan datos y se usan seudónimos efímeros;
+- que no se registran prompts/respuestas, que se purgan datos y resultados por 24 horas tras el cierre salvo obligación documentada y que la demo usa solo datos sintéticos;
+- que `FREE_MODEL_UNAVAILABLE` preserva el flujo manual y nunca activa un fallback pago.
 
 - [ ] **Paso 8: probar**
 
@@ -1960,7 +2008,7 @@ git commit -m "feat: add opt-in free-model assistance for Paideia users"
 
 - Caso nuevo.
 - Justificación breve.
-- Comparación mediante GPT-5.6.
+- Comparación mediante la política Zen gratuita verificada.
 - Matriz individual de proceso para el docente.
 
 - [ ] **Paso 1: crear actividad de transferencia**
@@ -1984,7 +2032,7 @@ El caso debe ser editable por el docente antes de activarlo.
 
 - [ ] **Paso 2: invocar comparación**
 
-El cliente enviará IDs de etapa inicial y de transferencia. La Edge Function cargará las respuestas, verificará rol y usará GPT-5.6.
+El cliente enviará IDs de etapa inicial y de transferencia, nunca un modelo. La Edge Function verificará rol, atestación y consentimientos, cargará solo respuestas consentidas y usará la allowlist gratuita verificada.
 
 - [ ] **Paso 3: mostrar resultados**
 
@@ -2055,7 +2103,7 @@ export const AI_ERROR_MESSAGES = {
   AUTH_REQUIRED: "Vuelve a ingresar a la sesión.",
   TEACHER_REQUIRED: "Solo el docente de esta sesión puede solicitar este análisis.",
   FREE_MODEL_UNAVAILABLE:
-    "No hay un modelo gratuito disponible. La actividad continúa sin asistencia.",
+    "No hay un modelo gratuito verificable disponible. La actividad continúa sin IA.",
   RATE_LIMITED:
     "Se alcanzó el límite de ayudas para esta etapa.",
   INVALID_MODEL_OUTPUT:
@@ -2071,13 +2119,13 @@ Reintentar una sola vez únicamente ante timeout, 429 o 5xx. No reintentar autor
 
 - [ ] **Paso 3: preservar la clase**
 
-Cuando falle GPT-5.6:
+Cuando la cadena gratuita falle en análisis o comparación:
 
 - seguir mostrando respuestas;
 - permitir al docente crear manualmente la actividad de tres columnas;
 - no desactivar la sesión.
 
-Cuando falle el modelo gratuito:
+Cuando la cadena gratuita falle en asistencia:
 
 - ocultar el loader;
 - conservar la respuesta del estudiante;
@@ -2131,12 +2179,11 @@ npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
 npx supabase secrets set \
   OPENCODE_ZEN_API_KEY="$OPENCODE_ZEN_API_KEY" \
-  ZEN_REASONING_MODEL="gpt-5.6-terra" \
-  ZEN_USER_MODEL="deepseek-v4-flash-free" \
+  ZEN_FREE_MODEL_ALLOWLIST="nemotron-3-ultra-free,hy3-free,deepseek-v4-flash-free,mimo-v2.5-free" \
   AI_DISCLOSURE_VERSION="2026-07-20"
 ```
 
-La clave nunca se escribe en un archivo.
+La clave nunca se escribe en un archivo, variable `VITE_*`, GitHub Pages, respuesta HTTP ni log. Mantener facturación y acceso a modelos pagos deshabilitados.
 
 - [ ] **Paso 3: aplicar migraciones y desplegar función**
 
@@ -2154,14 +2201,16 @@ curl -sS https://opencode.ai/zen/v1/models \
   -H "Authorization: Bearer $OPENCODE_ZEN_API_KEY"
 ```
 
-Verificar que estén presentes:
+Verificar la allowlist en este orden:
 
 ```text
-gpt-5.6-terra
-$ZEN_USER_MODEL
+nemotron-3-ultra-free
+hy3-free
+deepseek-v4-flash-free
+mimo-v2.5-free
 ```
 
-y que el segundo tenga precio cero o ID `*-free`.
+Para cada candidato ejecutable, verificar tarifas numéricas exactas `input=0` y `output=0`; el ID o sufijo nunca es suficiente. Omitir `hy3-free` hasta que ambas tarifas sean verificables. Si ninguno califica, la comprobación falla y la función debe devolver `FREE_MODEL_UNAVAILABLE` sin emitir una inferencia.
 
 - [ ] **Paso 5: configurar GitHub Pages**
 
@@ -2188,8 +2237,9 @@ Debe incluir:
 - problema y audiencia;
 - arquitectura;
 - funciones construidas con Codex;
-- uso de GPT-5.6;
-- uso del modelo gratuito para respuestas al usuario;
+- procedencia de desarrollo: construido con Codex usando GPT-5.6;
+- runtime separado: las tres operaciones usan solo la allowlist Zen gratuita verificada y nunca GPT-5.6, OpenAI o un modelo pago;
+- consentimiento colectivo, minimización, posible retención del proveedor, purga y modo manual;
 - instrucciones de prueba;
 - datos de ejemplo;
 - limitaciones;
@@ -2303,8 +2353,10 @@ Comprobar:
 
 - La clave Zen no aparece en `dist/`.
 - El cliente no puede elegir arbitrariamente un modelo.
-- `assist_user` rechaza modelos pagos.
+- Las tres operaciones rechazan candidatos fuera de allowlist, con precio ausente/no cero o con modelo efectivo distinto.
+- Las rutas rechazadas no emiten una llamada HTTP y el fallback conserva el orden configurado.
 - La Edge Function no recibe texto libre del cliente para análisis colectivo.
+- El análisis colectivo está desactivado sin atestación y consentimiento separado; respuestas no consentidas quedan fuera.
 - Las solicitudes repetidas devuelven la ejecución existente.
 
 ## Puerta C — después de Tarea 11
@@ -2323,8 +2375,10 @@ Comprobar:
 Comprobar:
 
 - Circuito completo en dos dispositivos.
-- GPT-5.6 aparece como modelo usado en análisis y comparación.
-- El modelo gratuito aparece como modelo usado en la respuesta al usuario.
+- Análisis, comparación y asistencia registran únicamente un modelo permitido y verificado en el orden correcto.
+- Ningún request se dirige a GPT-5.6, OpenAI, un modelo pago, un alias o un proveedor alternativo.
+- El modelo efectivo coincide con el candidato solicitado, los logs contienen solo metadatos permitidos y no hay prompts/respuestas.
+- Consentimiento, exclusión, redacción, truncamiento, alias efímeros y purga de 24 horas pasan sus pruebas.
 - Las evidencias enlazan a respuestas reales.
 - Toda recomendación puede ser ignorada o editada por el docente.
 - Build, pruebas unitarias, Edge y DB pasan.
@@ -2338,7 +2392,7 @@ El proyecto no se considerará terminado por “tener IA” ni por mostrar un da
 
 ```text
 evidencia inicial
-→ interpretación pedagógica con GPT-5.6
+→ interpretación pedagógica con Zen free-only verificado
 → opciones
 → decisión docente
 → intervención compartida en tiempo real
@@ -2347,6 +2401,8 @@ evidencia inicial
 → comparación con evidencia
 → nueva decisión docente
 ```
+
+Si la allowlist se agota, el mismo circuito continúa manualmente con `FREE_MODEL_UNAVAILABLE`; nunca habilita un modelo pago.
 
 ---
 

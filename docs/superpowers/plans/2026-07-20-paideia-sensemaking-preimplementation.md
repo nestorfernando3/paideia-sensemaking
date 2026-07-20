@@ -4,9 +4,9 @@
 
 **Goal:** dejar resueltos y verificados todos los prerrequisitos externos, pedagógicos, operativos y de seguridad antes de ejecutar el plan de desarrollo de Paideia Sensemaking.
 
-**Architecture:** esta fase cero no modifica código funcional. Produce un paquete mínimo de evidencia —remoto independiente, borrador de envío, contrato del MVP, accesos comprobados, línea base de seguridad, datos sintéticos y guion de demo— y termina en una puerta `GO/NO-GO` única. El plan de desarrollo existente sigue siendo la fuente autoritativa de implementación.
+**Architecture:** esta fase cero no modifica código funcional. Produce un paquete mínimo de evidencia —remoto independiente, borrador de envío, contrato del MVP, accesos comprobados, línea base de seguridad, datos sintéticos y guion de demo— y termina en una puerta `GO/NO-GO` única. El plan de desarrollo existente sigue siendo la fuente autoritativa de implementación. El proyecto se construye con Codex usando GPT-5.6, pero el runtime desplegado usa exclusivamente modelos gratuitos verificados de OpenCode Zen.
 
-**Tech Stack:** Git/GitHub CLI, Devpost, Node.js 20+, Supabase CLI, Docker, Deno, OpenCode Zen, OpenAI GPT-5.6, Markdown y JSON.
+**Tech Stack:** Git/GitHub CLI, Devpost, Node.js 20+, Supabase CLI, Docker, Deno, OpenCode Zen free-only runtime, Codex con GPT-5.6 para desarrollo, Markdown y JSON.
 
 ## Global Constraints
 
@@ -16,7 +16,11 @@
 - `nestorfernando3/paideia` permanece sin cambios y `upstream` nunca recibe `push`.
 - El nuevo repositorio será público, independiente y con licencia MIT: `nestorfernando3/paideia-sensemaking`.
 - No se guardan claves, tokens, contraseñas, datos de menores ni respuestas reales en Git, Obsidian, capturas o logs.
-- El gasto de IA de la semana queda limitado a USD 10 en OpenCode Zen; cualquier aumento requiere una decisión explícita del propietario.
+- La facturación de Zen permanecerá deshabilitada como defensa adicional. El runtime no solicita GPT-5.6, OpenAI ni ningún modelo pago bajo ninguna condición.
+- `OPENCODE_ZEN_API_KEY` existe solo como secreto de la Edge Function: nunca se incluye en frontend, Git, archivos, capturas ni logs.
+- `analyze_stage`, `compare_learning` y `assist_user` usan la misma allowlist privada y ordenada: `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`. Cada candidato requiere tarifas exactas de entrada y salida iguales a cero; un precio ausente o ambiguo falla cerrado. `hy3-free` se omite hasta que ese precio cero exacto sea verificable.
+- El cliente no elige ni envía un modelo. Si la lista se agota, el servidor devuelve `FREE_MODEL_UNAVAILABLE`, no llama a otro proveedor y conserva el flujo manual sin IA.
+- El análisis colectivo externo empieza desactivado, requiere atestación docente y consentimiento separado y reversible por participante; excluye respuestas no consentidas, minimiza y redacta PII, trunca texto y usa seudónimos efímeros por ejecución. La demo usa solo datos sintéticos.
 - La preparación pedagógica usa únicamente datos sintéticos identificados como `S01`, `S02`, etc.
 - No se inicia la Tarea 1 del plan de desarrollo hasta que la Puerta 0 quede en estado `GO`.
 - La fase cero tiene un límite de 90 minutos; el desarrollo debe congelarse a más tardar el 21 de julio a la 1:00 p. m. COT, la demo debe estar desplegada a las 3:00 p. m., el video publicado a las 5:00 p. m. y el envío finalizado a las 6:00 p. m.
@@ -61,6 +65,7 @@ Crear `docs/preimplementation/BUILD_WEEK_READINESS.md` con este contenido inicia
 - Deadline: 2026-07-21 17:00 PDT / 2026-07-21 19:00 COT
 - Eligibility: Colombia is included; entrant is above the legal age of majority.
 - Required project: working project built with Codex using GPT-5.6.
+- Build provenance only: the deployed runtime uses only the server-approved OpenCode Zen free-model fallback list and never calls GPT-5.6, OpenAI or paid models.
 - Required assets: English description, public YouTube demo under 3 minutes, repository URL, runnable demo, README and `/feedback` Codex Session ID.
 - Internal submission deadline: 2026-07-21 18:00 COT.
 
@@ -78,6 +83,7 @@ Crear `docs/preimplementation/BUILD_WEEK_READINESS.md` con este contenido inicia
 - [ ] Independent GitHub remote exists and `main` is published.
 - [ ] Product and demo contracts are frozen.
 - [ ] Required accounts and local runtimes are available.
+- [ ] Free-only Zen policy, server-only secret custody and collective-data safeguards are verified.
 - [ ] Legacy Supabase baseline is recorded without exporting row data.
 - [ ] Synthetic fixture parses successfully.
 - [ ] Submission schedule and owners are explicit.
@@ -204,12 +210,12 @@ Append to `docs/preimplementation/BUILD_WEEK_READINESS.md`:
 - Primary user: Colombian secondary-school Spanish teacher in a face-to-face class.
 - Domain: speech acts.
 - Problem: the teacher sees answers but cannot quickly distinguish literal reading, communicative intention and produced effect.
-- Promise: Paideia turns anonymous classroom evidence into an editable intervention and then checks transfer on a new case.
+- Promise: Paideia turns de-identified, minimized classroom evidence into an editable intervention and then checks transfer on a new case.
 - Teacher authority: AI proposes evidence, limitations and options; it never grades or advances the class autonomously.
-- Golden path: create session → join → activate initial case → answer → analyze with GPT-5.6 → edit/activate three-column intervention → answer transfer case → compare learning → teacher decides.
+- Golden path: create session + teacher attestation → join + participant consent → activate initial case → answer → analyze with the first verified-free Zen model → edit/activate three-column intervention → answer transfer case → compare learning with the same free-only policy → teacher decides.
 - Acceptance evidence: two browsers complete the golden path; analysis cites synthetic responses; comparison distinguishes observed change from remaining uncertainty.
-- Build Week submission cut: the golden path, GPT-5.6 analysis/comparison, secure data isolation, deployment and submission assets.
-- Full-MVP continuation after submission: free-model `assist_user`, expanded resilience and non-critical polish remain governed by the development plan.
+- Build Week submission cut: the golden path, free-only Zen analysis/comparison/assistance, secure data isolation, deployment and submission assets.
+- Full-MVP continuation after submission: expanded resilience and non-critical polish remain governed by the development plan.
 - Excluded before submission: open chat, automatic grading, LMS, voice, photos, multi-school dashboard, React rewrite and deep LAN changes.
 ```
 
@@ -230,11 +236,11 @@ Paideia Sensemaking helps secondary-school teachers turn live classroom evidence
 
 ## Project description
 
-Paideia Sensemaking is a teacher-controlled classroom feedback loop for secondary Spanish Language classes. Students respond to an initial speech-act case from their own devices. GPT-5.6 analyzes the group's anonymized evidence, identifies patterns and limitations, and proposes editable teaching moves. The teacher chooses the intervention, students apply a three-column frame—what was said, what the speaker attempted to do, and what effect it produced—and then solve a new transfer case. GPT-5.6 compares the before-and-after evidence, while the teacher keeps the final decision. The system never grades students automatically.
+Paideia Sensemaking is a teacher-controlled classroom feedback loop for secondary Spanish Language classes. Students respond to an initial speech-act case from their own devices. The deployed server analyzes consented, minimized evidence with the first verified-free model in a private OpenCode Zen fallback list, identifies patterns and limitations, and proposes editable teaching moves. The teacher chooses the intervention, students apply a three-column frame—what was said, what the speaker attempted to do, and what effect it produced—and then solve a new transfer case. The same free-only policy compares the before-and-after evidence, while the teacher keeps the final decision. The system never grades students automatically. The project was built with Codex using GPT-5.6; GPT-5.6 is not a runtime model.
 
 ## Judging case
 
-- Technological implementation: secure real-time orchestration, idempotent GPT-5.6 operations and evidence-linked outputs.
+- Technological implementation: secure real-time orchestration, idempotent free-only Zen operations and evidence-linked outputs.
 - Design: one coherent teacher/student journey on mobile and desktop.
 - Potential impact: faster formative intervention for a specific classroom problem.
 - Quality of idea: AI supports pedagogical sensemaking instead of acting as a generic tutor or grader.
@@ -243,7 +249,7 @@ Paideia Sensemaking is a teacher-controlled classroom feedback loop for secondar
 
 - [ ] Public GitHub repository with MIT license.
 - [ ] Public deployed demo.
-- [ ] README with setup, sample data, Codex collaboration and GPT-5.6 usage.
+- [ ] README with setup, synthetic sample data, Codex/GPT-5.6 development provenance and the free-only Zen runtime policy.
 - [ ] Public YouTube video under 3 minutes with English audio or English subtitles.
 - [ ] `/feedback` session ID from the Codex task containing most core implementation.
 - [ ] Final Devpost form submitted by 2026-07-21 18:00 COT.
@@ -253,12 +259,14 @@ Paideia Sensemaking is a teacher-controlled classroom feedback loop for secondar
 - 0:00–0:15 — Name the teacher problem and show the initial speech-act case.
 - 0:15–0:40 — Create a session and join from the student browser.
 - 0:40–1:00 — Submit contrasting initial responses and show live participation.
-- 1:00–1:30 — Run GPT-5.6 analysis; point to patterns, cited evidence and limitations.
+- 1:00–1:30 — Run free-only Zen analysis; point to the verified model, patterns, cited evidence and limitations.
 - 1:30–1:55 — Edit and activate the three-column intervention.
 - 1:55–2:20 — Complete the transfer case from the student browser.
 - 2:20–2:42 — Run comparison; show change, persistent difficulty and teacher decision.
 - 2:42–2:55 — Explain where Codex accelerated the build and where human decisions remained.
 - 2:55–2:59 — Show repository and deployed URL.
+
+The recording uses only synthetic data. Real classroom use requires the teacher's institutional attestation, separate reversible participant consent, data minimization and disclosure that a free provider may retain or use de-identified content.
 ```
 
 - [ ] **Step 3: verify scope language is consistent**
@@ -330,20 +338,22 @@ npx --yes supabase@2.39.2 projects list
 
 Expected result: the existing Paideia Supabase project is visible to the authenticated account. Do not paste the access token or database password into the readiness document.
 
-- [ ] **Step 5: verify Zen model availability**
+- [ ] **Step 5: verify the ordered free-only Zen allowlist**
 
 Run:
 
 ```bash
 curl -fsSL https://opencode.ai/zen/v1/models \
-  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const ids=JSON.parse(s).data.map(x=>x.id);if(!ids.includes("gpt-5.6-terra")||!ids.some(x=>x.endsWith("-free")))process.exit(1);console.log("gpt-5.6-terra and at least one free model available")})'
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const order=["nemotron-3-ultra-free","hy3-free","deepseek-v4-flash-free","mimo-v2.5-free"];const rows=JSON.parse(s).data;const eligible=order.filter(id=>{const m=rows.find(x=>x.id===id);return m&&typeof m.pricing?.input==="number"&&typeof m.pricing?.output==="number"&&m.pricing.input===0&&m.pricing.output===0});if(!eligible.length)process.exit(1);console.log(`verified free fallback: ${eligible.join(", ")}`)})'
 ```
 
 Expected result:
 
 ```text
-gpt-5.6-terra and at least one free model available
+verified free fallback: <one or more allowlisted IDs, in configured order>
 ```
+
+Un sufijo `-free` no basta. Todo candidato con precio de entrada o salida ausente, ambiguo o distinto de cero se omite. En particular, omitir `hy3-free` hasta que Zen publique exactamente ambos precios en cero.
 
 - [ ] **Step 6: verify secret custody**
 
@@ -355,16 +365,17 @@ test -n "${OPENCODE_ZEN_API_KEY:-}" && echo 'Zen key available in process enviro
 
 Expected result: the message appears. Do not print the value and do not add it to `.env`.
 
-- [ ] **Step 7: verify Zen billing protection**
+- [ ] **Step 7: verify free-only Zen defenses**
 
 In the OpenCode Zen dashboard:
 
 1. Confirm that the API key belongs to the active workspace.
-2. Confirm that paid access to `gpt-5.6-terra` is enabled.
-3. Set the workspace monthly usage limit to USD 10.
-4. Keep free models enabled only after reviewing their current data-retention notice.
+2. Keep paid access and billing disabled.
+3. Confirm the server allowlist is ordered exactly as documented and cannot be overridden by the client.
+4. Keep a candidate enabled only after verifying exact zero input/output prices and reviewing its current data-retention notice.
+5. Confirm `OPENCODE_ZEN_API_KEY` will be stored only as a Supabase Edge Function secret and never in frontend configuration, Git or logs.
 
-Expected result: GPT-5.6 can be used for the two core operations without unbounded spending.
+Expected result: the runtime can use at least one verified-free Zen candidate and cannot spend money or fall back to a paid model.
 
 - [ ] **Step 8: verify submission accounts manually**
 
@@ -389,8 +400,10 @@ Append to `docs/preimplementation/BUILD_WEEK_READINESS.md`, checking each item o
 - [ ] Docker daemon available for local Supabase tests.
 - [ ] Deno available for Edge Function tests.
 - [ ] OpenCode Zen key held outside Git and available to the execution shell.
-- [ ] Zen workspace has paid GPT-5.6 access and a USD 10 monthly usage limit.
-- [ ] `gpt-5.6-terra` and at least one `*-free` model present in the live Zen registry.
+- [ ] Zen billing and paid-model access remain disabled as defense in depth.
+- [ ] At least one allowlisted model has exact zero input/output prices; candidates retain the configured order and `hy3-free` is skipped until exactly verified.
+- [ ] `OPENCODE_ZEN_API_KEY` is held only in the Edge Function's server-side secrets.
+- [ ] Collective external analysis is default-off and its teacher attestation, separate reversible participant consent and manual no-AI alternative are documented.
 ```
 
 ---
@@ -647,10 +660,10 @@ Append to `docs/preimplementation/BUILD_WEEK_READINESS.md`:
 ## Cut-line rules
 
 1. Preserve the complete teacher-controlled golden path.
-2. Preserve GPT-5.6 in `analyze_stage` and `compare_learning`.
-3. Preserve authentication, `ps_*` isolation, RLS, anonymization and secret custody.
+2. Preserve the same server-owned, verified-free Zen fallback for `analyze_stage`, `compare_learning` and `assist_user`; never add a paid fallback.
+3. Preserve authentication, `ps_*` isolation, RLS, consent, minimization, PII redaction, ephemeral pseudonyms, 24-hour purge and server-only secret custody.
 4. Preserve a runnable public demo, README, video and repository.
-5. Defer the free-model assistant before weakening the core loop or safety.
+5. If free models are unavailable, preserve `FREE_MODEL_UNAVAILABLE` and the manual no-AI flow.
 6. Defer cosmetic improvements before weakening testability or deployment.
 ```
 
@@ -703,6 +716,13 @@ npm run build
 node -e 'const f=require("./docs/preimplementation/fixtures/speech-acts-classroom.json");if(!f.synthetic||f.responses.length!==6)process.exit(1)'
 rg -n 'Deadline: 2026-07-21|Track: Education|Build Week submission cut|Internal submission deadline' \
   docs/preimplementation/BUILD_WEEK_READINESS.md
+rg -n 'nemotron-3-ultra-free.*hy3-free.*deepseek-v4-flash-free.*mimo-v2.5-free|FREE_MODEL_UNAVAILABLE|billing.*disabled|facturaci.n.*deshabilitada' \
+  docs/preimplementation/BUILD_WEEK_READINESS.md \
+  2026-07-20-paideia-sensemaking-implementation-plan.md
+! rg -n 'ZEN_REASONING_MODEL|ZEN_USER_MODEL|analy[sz].*GPT-5\.6|GPT-5\.6.*compar' \
+  docs/preimplementation/BUILD_WEEK_READINESS.md \
+  docs/preimplementation/BUILD_WEEK_SUBMISSION.md \
+  2026-07-20-paideia-sensemaking-implementation-plan.md
 git diff --check
 ```
 
@@ -759,9 +779,9 @@ This plan is complete only when:
 1. The project is attached to an OpenAI Build Week draft in Education.
 2. The independent public GitHub repository exists and `upstream` cannot receive pushes.
 3. The teacher-controlled golden path and Build Week cut are frozen.
-4. GitHub, Devpost, YouTube, Supabase, Docker, Deno and Zen prerequisites are verified.
+4. GitHub, Devpost, YouTube, Supabase, Docker, Deno and the free-only Zen prerequisites are verified with billing disabled.
 5. The classic Supabase schema is captured without row data and Paideia classic still builds and loads.
-6. The synthetic fixture validates and contains no personal information.
+6. The synthetic fixture validates and contains no personal information; real-data analysis remains default-off without attestation and consent.
 7. The demo/submission clock preserves a one-hour deadline buffer.
 8. Handoff and Wiki are current.
 9. `docs/preimplementation/BUILD_WEEK_READINESS.md` ends in `Gate 0: GO`.
