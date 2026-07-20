@@ -17,7 +17,7 @@
 - El nuevo repositorio será público, independiente y con licencia MIT: `nestorfernando3/paideia-sensemaking`.
 - No se guardan claves, tokens, contraseñas, datos de menores ni respuestas reales en Git, Obsidian, capturas o logs.
 - La facturación de Zen permanecerá deshabilitada como defensa adicional. El runtime no solicita GPT-5.6, OpenAI ni ningún modelo pago bajo ninguna condición.
-- `OPENCODE_ZEN_API_KEY` existe solo como secreto de la Edge Function: nunca se incluye en frontend, Git, archivos, capturas ni logs.
+- `OPENCODE_ZEN_API_KEY` existe solo como secreto de la Edge Function: el propietario lo pega directamente desde su gestor de contraseñas en la UI autenticada y enmascarada de Supabase, fuera de sesiones/capturas de Codex o LLM, y limpia el portapapeles. Nunca se carga en shell local, argv, variables/archivos de entorno locales, archivos temporales, frontend, Git, capturas ni logs; Supabase lo inyecta únicamente en el runtime de la función.
 - `analyze_stage`, `compare_learning` y `assist_user` usan la misma allowlist privada y ordenada: `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`. La disponibilidad se verifica por ID exacto en `https://opencode.ai/zen/v1/models`; el costo se verifica por separado en `https://models.dev/api.json` bajo `.opencode.models[ID].cost`. Ambos snapshots deben estar disponibles y vigentes, y entrada/salida deben ser números exactamente cero. El registro Zen no contiene precio ni protocolo.
 - `hy3-free` se omite aunque Models.dev marque costo cero porque la tabla pública de precios/rutas de Zen todavía lo omite; cualquier ausencia, vencimiento o desacuerdo falla cerrado. Los demás IDs confirmados usan el endpoint fijo documentado `/zen/v1/chat/completions`.
 - El cliente no elige ni envía un modelo. Si la lista se agota, el servidor devuelve `FREE_MODEL_UNAVAILABLE`, no llama a otro proveedor y conserva el flujo manual sin IA.
@@ -375,13 +375,15 @@ El primer `curl` prueba solo disponibilidad por ID; el segundo prueba costo exac
 
 - [ ] **Step 6: verify secret custody**
 
-Load `OPENCODE_ZEN_API_KEY` from the user's password manager into the current shell only, then run:
+The owner performs this step manually, outside Codex/LLM-controlled browser snapshots or screen recording:
 
-```bash
-test -n "${OPENCODE_ZEN_API_KEY:-}" && echo 'Zen key available in process environment'
-```
+1. Open the authenticated Supabase Dashboard for the Paideia project.
+2. Open **Edge Functions → Secrets** and create `OPENCODE_ZEN_API_KEY`.
+3. Paste the value directly from the password manager into the secret-value field and save it.
+4. Clear the clipboard immediately.
+5. Verify only that the secret **name** appears with masked/hidden status. Never reveal, copy back, print or record the value.
 
-Expected result: the message appears. Do not print the value and do not add it to `.env`.
+Expected result: Supabase shows `OPENCODE_ZEN_API_KEY` by name with a masked value. Do not load it into a local shell, command argument, plaintext local environment/file or temporary file.
 
 - [ ] **Step 7: verify free-only Zen defenses**
 
@@ -392,7 +394,7 @@ In the OpenCode Zen dashboard:
 3. Confirm the server allowlist is ordered exactly as documented and cannot be overridden by the client.
 4. Verify availability from the Zen model-ID registry and exact zero input/output cost separately from Models.dev; keep snapshots no older than five minutes and fail closed on unavailable, missing, stale or disagreeing data.
 5. Confirm each enabled candidate also appears as Free with the fixed Chat Completions route in Zen's public documentation; keep `hy3-free` disabled while omitted.
-6. Review the current data-retention notice and confirm `OPENCODE_ZEN_API_KEY` will be stored only as a Supabase Edge Function secret and never in frontend configuration, Git or logs.
+6. Review the current data-retention notice and confirm `OPENCODE_ZEN_API_KEY` was delivered only through the authenticated masked Supabase Secrets UI; verify by secret name/status, never by value.
 
 Expected result: the runtime can use at least one verified-free Zen candidate and cannot spend money or fall back to a paid model.
 
@@ -418,11 +420,11 @@ Append to `docs/preimplementation/BUILD_WEEK_READINESS.md`, checking each item o
 - [ ] Supabase CLI 2.39.2 available and project visible.
 - [ ] Docker daemon available for local Supabase tests.
 - [ ] Deno available for Edge Function tests.
-- [ ] OpenCode Zen key held outside Git and available to the execution shell.
+- [ ] Owner stored `OPENCODE_ZEN_API_KEY` by direct password-manager paste into the authenticated Supabase Edge Functions Secrets UI, then cleared the clipboard; the value never entered a local shell, argv, local environment/file, temporary file, Codex/LLM snapshot or log.
 - [ ] Zen billing and paid-model access remain disabled as defense in depth.
 - [ ] At least one allowlisted ID is present in the Zen registry, has exact numeric zero input/output cost in `.opencode.models[ID].cost` from Models.dev, and has matching Free/Chat Completions confirmation in Zen's public docs; sources are fresh and agree.
 - [ ] `hy3-free` remains in its ranked position but is skipped while Zen's public pricing/routing docs omit it, even though Models.dev currently reports zero.
-- [ ] `OPENCODE_ZEN_API_KEY` is held only in the Edge Function's server-side secrets.
+- [ ] Supabase shows the `OPENCODE_ZEN_API_KEY` secret name with masked status; no key value is displayed or recorded.
 - [ ] Collective external analysis is default-off and its teacher attestation, separate reversible participant consent and manual no-AI alternative are documented.
 ```
 

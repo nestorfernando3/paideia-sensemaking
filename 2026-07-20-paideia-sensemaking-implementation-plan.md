@@ -15,7 +15,7 @@
 - Como defensa ante divergencia documental, el candidato también debe estar confirmado como `Free` en la tabla pública de precios de Zen. `hy3-free` sigue en la allowlist ordenada, pero se omite aunque Models.dev marque cero porque Zen lo omite de su tabla pública; solo se habilita tras confirmación autoritativa de Zen y actualización revisada del conjunto `ZEN_PUBLIC_PRICE_CONFIRMED_IDS`.
 - El cliente no elige ni envía un modelo. La selección ocurre antes de construir o emitir una solicitud de inferencia. Si el proveedor devuelve un modelo efectivo distinto del candidato autorizado, esa solicitud ya ocurrió, pero su respuesta nunca se acepta, muestra ni persiste como éxito; el fallback solo puede avanzar al siguiente candidato gratuito prevalidado.
 - Si ningún candidato es elegible o todos fallan, el servidor devuelve `FREE_MODEL_UNAVAILABLE`; la clase conserva el flujo manual sin IA. No existe fallback a GPT-5.6, OpenAI, un alias, otro proveedor ni ningún modelo pago.
-- `OPENCODE_ZEN_API_KEY` existe exclusivamente como secreto de la Supabase Edge Function. Nunca entra al frontend, Git, archivos de configuración, capturas ni logs. La facturación y el acceso pago permanecen deshabilitados como defensa adicional.
+- `OPENCODE_ZEN_API_KEY` existe exclusivamente como secreto de la Supabase Edge Function. El propietario lo pega desde el gestor de contraseñas directamente en la UI autenticada y enmascarada de Supabase, fuera de capturas/sesiones de Codex o LLM, y limpia el portapapeles. Nunca entra en shell local, argv, variables/archivos de entorno locales, archivos temporales, frontend, Git, capturas ni logs; Supabase lo inyecta únicamente en el runtime de la función. La facturación y el acceso pago permanecen deshabilitados como defensa adicional.
 - Los logs de ejecución contienen únicamente `operation`, modelo seleccionado/efectivo, índice de fallback, `is_free_model`, estado, hash de entrada y versión del aviso. Nunca contienen prompts, respuestas del aula, salidas del modelo, IDs persistentes ni texto sensible.
 - El análisis colectivo externo empieza desactivado. Requiere atestación docente de aprobación institucional y autorización aplicable, más consentimiento separado, versionado y reversible por participante. `free_ai_consent_at` sigue siendo exclusivo de `assist_user`; nunca se reutiliza como consentimiento colectivo.
 - Las respuestas sin consentimiento colectivo vigente permanecen disponibles para la clase, pero se excluyen de todo payload externo y de nuevas salidas de análisis/comparación. El servidor recupera solo etapas necesarias, minimiza campos, redacta PII, trunca límites aprobados y reemplaza IDs por seudónimos aleatorios efímeros por `ai_run`; el mapa existe solo en memoria.
@@ -2234,12 +2234,11 @@ npx supabase login
 npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
 npx supabase secrets set \
-  OPENCODE_ZEN_API_KEY="$OPENCODE_ZEN_API_KEY" \
   ZEN_FREE_MODEL_ALLOWLIST="nemotron-3-ultra-free,hy3-free,deepseek-v4-flash-free,mimo-v2.5-free" \
   AI_DISCLOSURE_VERSION="2026-07-20"
 ```
 
-La clave nunca se escribe en un archivo, variable `VITE_*`, GitHub Pages, respuesta HTTP ni log. Mantener facturación y acceso a modelos pagos deshabilitados.
+El comando anterior configura solo valores no secretos. Para `OPENCODE_ZEN_API_KEY`, el propietario abre **Supabase Dashboard → Edge Functions → Secrets**, pega el valor directamente desde el gestor de contraseñas y guarda fuera de cualquier captura/sesión de Codex o LLM; después limpia el portapapeles. Verifica únicamente que el nombre aparezca con valor enmascarado/oculto. No pasar la clave por CLI, stdin no verificado, shell local, argv, environment/archivo local, archivo temporal, `VITE_*`, GitHub Pages, respuesta HTTP o log. Mantener facturación y acceso a modelos pagos deshabilitados.
 
 - [ ] **Paso 3: aplicar migraciones y desplegar función**
 

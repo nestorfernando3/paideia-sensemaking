@@ -47,8 +47,8 @@
 - [ ] Supabase CLI 2.39.2 available and project visible.
 - [x] Docker daemon available for local Supabase tests.
 - [x] Deno available for Edge Function tests.
-- [ ] OpenCode Zen key held outside Git and available to the execution shell.
-- [ ] `OPENCODE_ZEN_API_KEY` is stored only as a Supabase Edge Function secret; it never enters frontend configuration, Git or logs.
+- [ ] Owner pasted `OPENCODE_ZEN_API_KEY` directly from the password manager into the authenticated Supabase Edge Functions Secrets UI, outside Codex/LLM browser snapshots, then cleared the clipboard; the value never entered a local shell, argv, local environment/file, temporary file, frontend, Git or logs.
+- [ ] Supabase shows only the `OPENCODE_ZEN_API_KEY` secret name and masked/hidden status; no value was displayed, copied back or recorded.
 - [ ] Zen billing and paid-model access remain disabled as defense in depth.
 - [ ] Ordered server allowlist is `nemotron-3-ultra-free`, `hy3-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`; availability comes only from exact IDs in `https://opencode.ai/zen/v1/models`, while exact numeric zero input/output cost comes separately from `.opencode.models[ID].cost` in `https://models.dev/api.json`.
 - [ ] Both source snapshots are available and no older than five minutes; missing, stale or disagreeing evidence fails closed. The Zen registry is not treated as price or protocol metadata.
