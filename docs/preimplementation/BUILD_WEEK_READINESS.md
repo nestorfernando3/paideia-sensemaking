@@ -35,3 +35,16 @@
 - Submission ID: `1106114`
 - Education was saved and verified on 2026-07-20.
 - The final submission was not sent; the entry remains a draft.
+
+## Product contract
+
+- Primary user: Colombian secondary-school Spanish teacher in a face-to-face class.
+- Domain: speech acts.
+- Problem: the teacher sees answers but cannot quickly distinguish literal reading, communicative intention and produced effect.
+- Promise: Paideia turns anonymous classroom evidence into an editable intervention and then checks transfer on a new case.
+- Teacher authority: AI proposes evidence, limitations and options; it never grades or advances the class autonomously.
+- Golden path: create session → join → activate initial case → answer → analyze with GPT-5.6 → edit/activate three-column intervention → answer transfer case → compare learning → teacher decides.
+- Acceptance evidence: two browsers complete the golden path; analysis cites synthetic responses; comparison distinguishes observed change from remaining uncertainty.
+- Build Week submission cut: the golden path, GPT-5.6 analysis/comparison, secure data isolation, deployment and submission assets.
+- Full-MVP continuation after submission: free-model `assist_user`, expanded resilience and non-critical polish remain governed by the development plan.
+- Excluded before submission: open chat, automatic grading, LMS, voice, photos, multi-school dashboard, React rewrite and deep LAN changes.
