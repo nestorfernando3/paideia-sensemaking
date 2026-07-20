@@ -36,6 +36,19 @@
 - Education was saved and verified on 2026-07-20.
 - The final submission was not sent; the entry remains a draft.
 
+## Access and runtime matrix
+
+- [x] GitHub CLI authenticated as `nestorfernando3` with `repo` and `workflow` scopes.
+- [x] Devpost OpenAI Build Week draft editable.
+- [ ] YouTube upload and publication available.
+- [x] Node.js 20+ available.
+- [ ] Supabase CLI 2.39.2 available and project visible.
+- [x] Docker daemon available for local Supabase tests.
+- [x] Deno available for Edge Function tests.
+- [ ] OpenCode Zen key held outside Git and available to the execution shell.
+- [ ] Zen workspace has paid GPT-5.6 access and a USD 10 monthly usage limit.
+- [x] `gpt-5.6-terra` and at least one `*-free` model present in the live Zen registry.
+
 ## Product contract
 
 - Primary user: Colombian secondary-school Spanish teacher in a face-to-face class.
