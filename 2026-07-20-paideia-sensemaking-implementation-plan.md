@@ -412,14 +412,14 @@ git remote -v
 
 Resultado esperado: la URL de fetch de `upstream` permanece; la URL de push es `DISABLED`.
 
-- [ ] **Paso 3: instalar la suite mínima**
+- [x] **Paso 3: instalar la suite mínima**
 
 ```bash
 npm install
 npm install --save-dev vitest@^2.1.9 jsdom@^25.0.1 @vitest/coverage-v8@^2.1.9 supabase@^2.39.2
 ```
 
-- [ ] **Paso 4: añadir scripts exactos a `package.json`**
+- [x] **Paso 4: añadir scripts exactos a `package.json`**
 
 ```json
 {
@@ -441,7 +441,7 @@ npm install --save-dev vitest@^2.1.9 jsdom@^25.0.1 @vitest/coverage-v8@^2.1.9 su
 
 Conservar los scripts de modo local y Electron existentes.
 
-- [ ] **Paso 5: escribir la prueba que falla**
+- [x] **Paso 5: escribir la prueba que falla**
 
 `tests/unit/smoke.test.js`:
 
@@ -456,7 +456,7 @@ describe("Paideia Sensemaking", () => {
 });
 ```
 
-- [ ] **Paso 6: configurar Vitest**
+- [x] **Paso 6: configurar Vitest**
 
 `vitest.config.js`:
 
@@ -488,7 +488,7 @@ afterEach(() => {
 });
 ```
 
-- [ ] **Paso 7: crear `.env.example`**
+- [x] **Paso 7: crear `.env.example`**
 
 ```dotenv
 VITE_SUPABASE_URL=
@@ -498,7 +498,7 @@ VITE_PAIDEIA_AI_FUNCTION=paideia-ai
 
 No colocar `OPENCODE_ZEN_API_KEY` aquí; es un secreto exclusivo de Supabase.
 
-- [ ] **Paso 8: ejecutar la línea base**
+- [x] **Paso 8: ejecutar la línea base**
 
 ```bash
 npm run test
@@ -507,7 +507,7 @@ npm run build
 
 Resultado esperado: pruebas y build pasan.
 
-- [ ] **Paso 9: crear CI**
+- [x] **Paso 9: crear CI**
 
 `.github/workflows/ci.yml`:
 
@@ -533,7 +533,7 @@ jobs:
       - run: npm run build
 ```
 
-- [ ] **Paso 10: commit**
+- [x] **Paso 10: commit**
 
 ```bash
 git add .
@@ -557,14 +557,14 @@ git push origin main
 - RPC seguras `ps_create_session`, `ps_join_session` y `ps_activate_stage`.
 - RLS basada en usuario y rol.
 
-- [ ] **Paso 1: inicializar Supabase local**
+- [x] **Paso 1: inicializar Supabase local**
 
 ```bash
 npx supabase init
 npx supabase start
 ```
 
-- [ ] **Paso 2: escribir primero la prueba de aislamiento**
+- [x] **Paso 2: escribir primero la prueba de aislamiento**
 
 `supabase/tests/paideia_sensemaking_rls.sql`:
 
@@ -583,7 +583,7 @@ select * from finish();
 rollback;
 ```
 
-- [ ] **Paso 3: ejecutar y confirmar fallo**
+- [x] **Paso 3: ejecutar y confirmar fallo**
 
 ```bash
 npx supabase test db
@@ -591,7 +591,7 @@ npx supabase test db
 
 Resultado esperado: falla porque las tablas `ps_*` aún no existen.
 
-- [ ] **Paso 4: crear la migración**
+- [x] **Paso 4: crear la migración**
 
 La migración debe contener exactamente estos objetos y restricciones:
 
@@ -1025,7 +1025,7 @@ La implementación deberá envolver los `alter publication` en comprobaciones de
 
 La migración debe añadir una función programable de purga que elimine `ps_responses`, `ps_ai_runs.result` y extractos asociados a más tardar 24 horas del cierre de la sesión, salvo que `retention_obligation` documente una obligación institucional. Consentimiento retirado invalida cualquier nueva inclusión externa, no elimina la respuesta del flujo local de clase.
 
-- [ ] **Paso 5: aplicar y probar**
+- [x] **Paso 5: aplicar y probar**
 
 ```bash
 npx supabase db reset
@@ -1034,7 +1034,7 @@ npx supabase test db
 
 Resultado esperado: todas las pruebas pasan.
 
-- [ ] **Paso 6: verificar que no hay cambios sobre tablas clásicas**
+- [x] **Paso 6: verificar que no hay cambios sobre tablas clásicas**
 
 ```bash
 grep -RniE 'alter table public\.(sessions|tool_entries)|drop table public\.(sessions|tool_entries)' \
@@ -1043,7 +1043,7 @@ grep -RniE 'alter table public\.(sessions|tool_entries)|drop table public\.(sess
 
 Resultado esperado: sin coincidencias.
 
-- [ ] **Paso 7: commit**
+- [x] **Paso 7: commit**
 
 ```bash
 git add supabase
