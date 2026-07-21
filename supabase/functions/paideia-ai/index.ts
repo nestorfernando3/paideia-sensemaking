@@ -449,8 +449,25 @@ serve(async (req: Request) => {
           ],
         });
         let candidateResult: unknown;
+        let candidateUsedModel = completion.usedModel;
         try {
           candidateResult = extractJsonObject(completion.rawContent);
+          if (
+            request.operation === "assist_user" && candidateResult &&
+            typeof candidateResult === "object"
+          ) {
+            candidateResult = {
+              ...candidateResult,
+              model: candidateUsedModel,
+              isFreeModel: true,
+            };
+          }
+          assertAiResult(request.operation, candidateResult, {
+            allowedAliasIds: prompts.allowedAliasIds,
+            expectedIntent: request.operation === "assist_user"
+              ? request.intent
+              : undefined,
+          });
         } catch {
           const repaired = await callZenChatCompletion({
             apiKey,
@@ -466,26 +483,27 @@ serve(async (req: Request) => {
               },
             ],
           });
+          candidateUsedModel = repaired.usedModel;
           candidateResult = extractJsonObject(repaired.rawContent);
+          if (
+            request.operation === "assist_user" && candidateResult &&
+            typeof candidateResult === "object"
+          ) {
+            candidateResult = {
+              ...candidateResult,
+              model: candidateUsedModel,
+              isFreeModel: true,
+            };
+          }
+          assertAiResult(request.operation, candidateResult, {
+            allowedAliasIds: prompts.allowedAliasIds,
+            expectedIntent: request.operation === "assist_user"
+              ? request.intent
+              : undefined,
+          });
         }
 
-        usedModel = completion.usedModel;
-        if (
-          request.operation === "assist_user" && candidateResult &&
-          typeof candidateResult === "object"
-        ) {
-          candidateResult = {
-            ...candidateResult,
-            model: usedModel,
-            isFreeModel: true,
-          };
-        }
-        assertAiResult(request.operation, candidateResult, {
-          allowedAliasIds: prompts.allowedAliasIds,
-          expectedIntent: request.operation === "assist_user"
-            ? request.intent
-            : undefined,
-        });
+        usedModel = candidateUsedModel;
         fallbackIndex = i;
         resultJson = candidateResult;
       } catch (error) {
