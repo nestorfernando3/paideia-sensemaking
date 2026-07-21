@@ -142,12 +142,12 @@ begin
     or not exists (select 1 from public.ps_ai_runs where input_hash = 'retained-ai' and result is not null)
   then raise exception 'documented retention obligation was ignored'; end if;
 
-  if (select affected_rows from public.ps_migration_audit where reason = 'stages_deleted_during_hardening') <> 1
-    or (select affected_rows from public.ps_migration_audit where reason = 'responses_deleted_during_hardening') <> 1
-    or (select affected_rows from public.ps_migration_audit where reason = 'ai_runs_deleted_during_hardening') <> 1
-    or (select affected_rows from public.ps_migration_audit where reason = 'teacher_decisions_deleted_during_hardening') <> 1
-    or (select affected_rows from public.ps_migration_audit where reason = 'ai_results_cleared_by_upgrade_purge') <> 1
-    or (select affected_rows from public.ps_migration_audit where reason = 'responses_deleted_by_upgrade_purge') <> 1
+  if (select affected_rows from public.ps_migration_audit where reason = 'stages_deleted_during_hardening') is distinct from 1
+    or (select affected_rows from public.ps_migration_audit where reason = 'responses_deleted_during_hardening') is distinct from 1
+    or (select affected_rows from public.ps_migration_audit where reason = 'ai_runs_deleted_during_hardening') is distinct from 1
+    or (select affected_rows from public.ps_migration_audit where reason = 'teacher_decisions_deleted_during_hardening') is distinct from 1
+    or (select affected_rows from public.ps_migration_audit where reason = 'ai_results_cleared_by_upgrade_purge') is distinct from 1
+    or (select affected_rows from public.ps_migration_audit where reason = 'responses_deleted_by_upgrade_purge') is distinct from 1
   then raise exception 'sanitization audit counts are incomplete'; end if;
 
   if exists (
