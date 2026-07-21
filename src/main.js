@@ -9,6 +9,7 @@ import { renderStudentJoin, initStudentJoin } from './views/student.js';
 import { renderSession, initSession } from './views/session.js';
 import { renderStage, initStage } from './views/stage.js';
 import { renderAnalysis, initAnalysis } from './views/analysis.js';
+import { renderComparison, initComparison } from './views/comparison.js';
 import { renderGnosis, initGnosis } from './views/gnosis.js';
 import { renderEikasia, initEikasia } from './views/eikasia.js';
 import { renderAporia, initAporia } from './views/aporia.js';
@@ -56,6 +57,16 @@ function navigate() {
     if (routes[path]) {
         app.innerHTML = routes[path].render();
         if (routes[path].init) routes[path].init();
+        window.scrollTo(0, 0);
+        return;
+    }
+
+    // Comparison route: /session/:sessionId/comparison/:initialStageRunId/:transferStageRunId
+    const comparisonMatch = path.match(/^\/session\/([0-9a-f-]+)\/comparison\/([0-9a-f-]+)\/([0-9a-f-]+)$/i);
+    if (comparisonMatch) {
+        const [, sessionId, initialStageRunId, transferStageRunId] = comparisonMatch;
+        app.innerHTML = renderComparison(sessionId, initialStageRunId, transferStageRunId);
+        initComparison(sessionId, initialStageRunId, transferStageRunId);
         window.scrollTo(0, 0);
         return;
     }
