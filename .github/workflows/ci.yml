@@ -15,5 +15,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Production Dependency Audit Gate
+        run: npm audit --omit=dev
       - run: npm run test
       - run: npm run build

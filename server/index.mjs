@@ -3,7 +3,7 @@ import https from 'https';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import ip from 'ip';
+import os from 'os';
 import cors from 'cors';
 import selfsigned from 'selfsigned';
 
@@ -11,6 +11,18 @@ import selfsigned from 'selfsigned';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
+
+function getLocalIpAddress() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const net of interfaces[name] || []) {
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return '127.0.0.1';
+}
 
 // Generate self-signed TLS certificate (valid for 365 days)
 const attrs = [{ name: 'commonName', value: 'paideia.local' }];
@@ -37,11 +49,12 @@ app.get('/', (req, res) => {
 
 // API: Server info (used by the frontend in Local Mode to get the network URL for QR codes)
 app.get('/api/info', (req, res) => {
+    const localIp = getLocalIpAddress();
     res.json({
         mode: 'LOCAL',
-        ip: ip.address(),
+        ip: localIp,
         port: PORT,
-        networkUrl: `http://${ip.address()}:${PORT}`
+        networkUrl: `http://${localIp}:${PORT}`
     });
 });
 
@@ -61,7 +74,7 @@ const db = {
 
 // Start server
 httpsServer.listen(PORT, '0.0.0.0', () => {
-    const localIp = ip.address();
+    const localIp = getLocalIpAddress();
     console.log(`
   🔒 PAIDEIA LOCAL SERVER RUNNING (HTTPS)!
   
