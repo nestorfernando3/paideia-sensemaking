@@ -1,8 +1,8 @@
-export const ZEN_CHAT_COMPLETIONS_URL = "https://opencode.ai/zen/v1/chat/completions";
+export const ZEN_CHAT_COMPLETIONS_URL =
+  "https://opencode.ai/zen/v1/chat/completions";
 
 export const ZEN_CHAT_COMPLETIONS_IDS = new Set<string>([
   "nemotron-3-ultra-free",
-  "hy3-free",
   "deepseek-v4-flash-free",
   "mimo-v2.5-free",
 ]);
@@ -49,7 +49,9 @@ export async function callZenChatCompletion(input: {
   const effectiveModel = jsonBody.model || input.candidateModel;
 
   if (effectiveModel !== input.candidateModel) {
-    throw new Error(`MODEL_MISMATCH: expected ${input.candidateModel}, got ${effectiveModel}`);
+    throw new Error(
+      `MODEL_MISMATCH: expected ${input.candidateModel}, got ${effectiveModel}`,
+    );
   }
 
   const rawContent = extractText(jsonBody);

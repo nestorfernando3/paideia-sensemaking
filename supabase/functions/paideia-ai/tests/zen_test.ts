@@ -1,5 +1,17 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { selectFreeModels, extractJsonObject } from "../../_shared/modelRegistry.ts";
+import {
+  DEFAULT_ORDERED_ALLOWLIST,
+  extractJsonObject,
+  selectFreeModels,
+} from "../../_shared/modelRegistry.ts";
+
+Deno.test("el allowlist runtime contiene únicamente los tres modelos gratuitos aprobados", () => {
+  assertEquals(DEFAULT_ORDERED_ALLOWLIST, [
+    "nemotron-3-ultra-free",
+    "deepseek-v4-flash-free",
+    "mimo-v2.5-free",
+  ]);
+});
 
 Deno.test("selectFreeModels cruza disponibilidad y costo sin reordenar", () => {
   const now = Date.now();
@@ -33,7 +45,7 @@ Deno.test("selectFreeModels cruza disponibilidad y costo sin reordenar", () => {
       ]),
       now,
     }),
-    ["nemotron-3-ultra-free", "mimo-v2.5-free"]
+    ["nemotron-3-ultra-free", "mimo-v2.5-free"],
   );
 });
 
@@ -53,12 +65,13 @@ Deno.test("selectFreeModels falla cerrado ante snapshot vencido", () => {
       zenPublicPriceConfirmedIds: new Set(["nemotron-3-ultra-free"]),
       now,
     }),
-    []
+    [],
   );
 });
 
 Deno.test("extractJsonObject extrae objeto JSON limpio de bloques de texto o markdown", () => {
-  const raw = "Aquí está la respuesta:\n```json\n{\n  \"status\": \"advance\"\n}\n```\nGracias.";
+  const raw =
+    'Aquí está la respuesta:\n```json\n{\n  "status": "advance"\n}\n```\nGracias.';
   const extracted = extractJsonObject(raw);
   assertEquals(extracted, { status: "advance" });
 });

@@ -11,7 +11,6 @@ export const ZEN_PUBLIC_PRICE_CONFIRMED_IDS = new Set<string>([
 
 export const DEFAULT_ORDERED_ALLOWLIST: string[] = [
   "nemotron-3-ultra-free",
-  "hy3-free",
   "deepseek-v4-flash-free",
   "mimo-v2.5-free",
 ];
@@ -34,7 +33,8 @@ export function selectFreeModels(input: {
 }): string[] {
   const now = input.now ?? Date.now();
   const allowlist = input.orderedAllowlist ?? DEFAULT_ORDERED_ALLOWLIST;
-  const confirmedIds = input.zenPublicPriceConfirmedIds ?? ZEN_PUBLIC_PRICE_CONFIRMED_IDS;
+  const confirmedIds = input.zenPublicPriceConfirmedIds ??
+    ZEN_PUBLIC_PRICE_CONFIRMED_IDS;
 
   if (now - input.availability.fetchedAt > MAX_SNAPSHOT_AGE_MS) {
     return [];
@@ -71,7 +71,10 @@ let cachedCosts: Snapshot<Record<string, ModelCost>> | null = null;
 
 export async function fetchZenModelIds(): Promise<Snapshot<Set<string>>> {
   const now = Date.now();
-  if (cachedAvailability && now - cachedAvailability.fetchedAt < MAX_SNAPSHOT_AGE_MS) {
+  if (
+    cachedAvailability &&
+    now - cachedAvailability.fetchedAt < MAX_SNAPSHOT_AGE_MS
+  ) {
     return cachedAvailability;
   }
 
@@ -92,7 +95,9 @@ export async function fetchZenModelIds(): Promise<Snapshot<Set<string>>> {
   return cachedAvailability;
 }
 
-export async function fetchOpenCodeModelCosts(): Promise<Snapshot<Record<string, ModelCost>>> {
+export async function fetchOpenCodeModelCosts(): Promise<
+  Snapshot<Record<string, ModelCost>>
+> {
   const now = Date.now();
   if (cachedCosts && now - cachedCosts.fetchedAt < MAX_SNAPSHOT_AGE_MS) {
     return cachedCosts;
@@ -104,14 +109,19 @@ export async function fetchOpenCodeModelCosts(): Promise<Snapshot<Record<string,
   }
 
   const body = (await res.json()) as {
-    opencode?: { models?: Record<string, { cost?: { input?: number; output?: number } }> };
+    opencode?: {
+      models?: Record<string, { cost?: { input?: number; output?: number } }>;
+    };
   };
 
   const costs: Record<string, ModelCost> = {};
   const modelsMap = body?.opencode?.models ?? {};
 
   for (const [id, info] of Object.entries(modelsMap)) {
-    if (typeof info?.cost?.input === "number" && typeof info?.cost?.output === "number") {
+    if (
+      typeof info?.cost?.input === "number" &&
+      typeof info?.cost?.output === "number"
+    ) {
       costs[id] = {
         input: info.cost.input,
         output: info.cost.output,
