@@ -21,6 +21,7 @@ import {
 } from '../services/sessionService.js';
 import { requestUserAssistance } from '../services/aiService.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
+import { deriveUserRole, getCurrentRole } from '../utils/session.js';
 
 export function deriveStageRole(membership) {
   return ['teacher', 'student'].includes(membership?.role) ? membership.role : null;
@@ -42,6 +43,13 @@ export async function initStage(sessionId, stageRunId) {
   const loadingEl = document.getElementById('stage-loading');
   const contentEl = document.getElementById('stage-content');
   if (!contentEl) return;
+
+  const previousRole = getCurrentRole();
+  const verifiedRole = await deriveUserRole(sessionId);
+  if (verifiedRole !== previousRole) {
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    return;
+  }
 
   let session = null;
   let stageRuns = [];
