@@ -6,6 +6,7 @@ export {
   listSessionMembers,
   getCurrentMembership,
   listStageRuns,
+  listSessionResponses,
   activateStage,
   createTransferStage,
   endSensemakingSession,

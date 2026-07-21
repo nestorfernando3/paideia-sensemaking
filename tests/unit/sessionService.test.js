@@ -6,6 +6,7 @@ import {
   getSensemakingSession,
   listSessionMembers,
   listStageRuns,
+  listSessionResponses,
   activateStage,
   createTransferStage,
   endSensemakingSession,
@@ -235,6 +236,23 @@ describe("sessionService & sensemakingRepository", () => {
       const stages = await listStageRuns("sess-1");
       expect(supabase.from).toHaveBeenCalledWith("ps_stage_runs");
       expect(stages).toHaveLength(1);
+    });
+
+    it("listSessionResponses consulta las respuestas visibles de la sesión", async () => {
+      const selectMock = vi.fn().mockReturnThis();
+      const eqMock = vi.fn().mockResolvedValueOnce({
+        data: [{ stage_run_id: "stage-1", user_id: "u1", payload: { answer: "Sí" } }],
+        error: null,
+      });
+
+      supabase.from.mockReturnValueOnce({ select: selectMock, eq: eqMock });
+
+      const responses = await listSessionResponses("sess-1");
+
+      expect(supabase.from).toHaveBeenCalledWith("ps_responses");
+      expect(selectMock).toHaveBeenCalledWith("stage_run_id,user_id,payload");
+      expect(eqMock).toHaveBeenCalledWith("session_id", "sess-1");
+      expect(responses).toHaveLength(1);
     });
 
     it("activateStage invoca rpc('ps_activate_stage')", async () => {

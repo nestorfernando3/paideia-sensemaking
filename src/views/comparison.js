@@ -9,6 +9,7 @@ import { runLearningComparison } from '../services/aiService.js';
 import {
   getSensemakingSession,
   listSessionMembers,
+  listSessionResponses,
   listStageRuns,
 } from '../services/sessionService.js';
 import { escapeHtml } from '../utils/escapeHtml.js';
@@ -42,12 +43,16 @@ export async function initComparison(sessionId, initialStageRunId, transferStage
   let session = null;
   let members = [];
   let stageRuns = [];
+  let responses = [];
   let comparisonResult = null;
 
   try {
     session = await getSensemakingSession(sessionId);
     members = await listSessionMembers(sessionId);
-    stageRuns = await listStageRuns(sessionId);
+    [stageRuns, responses] = await Promise.all([
+      listStageRuns(sessionId),
+      listSessionResponses(sessionId),
+    ]);
     comparisonResult = await runLearningComparison({
       sessionId,
       initialStageRunId,
@@ -95,7 +100,7 @@ export async function initComparison(sessionId, initialStageRunId, transferStage
   const matrixHtml = renderProcessMatrix({
     members,
     stageRuns,
-    responses: [],
+    responses,
   });
 
   contentEl.innerHTML = `

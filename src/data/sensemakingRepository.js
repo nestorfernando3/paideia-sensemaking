@@ -142,6 +142,16 @@ export async function listStageRuns(sessionId) {
   return data;
 }
 
+export async function listSessionResponses(sessionId) {
+  const { data, error } = await supabase
+    .from("ps_responses")
+    .select("stage_run_id,user_id,payload")
+    .eq("session_id", sessionId);
+
+  if (error) throw error;
+  return data;
+}
+
 export async function activateStage(stageRunId) {
   const { data, error } = await supabase.rpc("ps_activate_stage", {
     p_stage_run_id: stageRunId,
