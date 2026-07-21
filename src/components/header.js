@@ -13,16 +13,18 @@ export function renderHeader() {
 
   let sessionHtml = '';
   if (session) {
-    const greekCode = generateGreekCode(session.code);
-    const roleLabel = role === 'teacher' ? 'Docente' : 'Estudiante';
-    const roleBadgeClass = role === 'teacher' ? 'badge--gold' : 'badge--aegean';
+    const sessionCode = session.join_code || session.code;
+    const greekCode = generateGreekCode(sessionCode);
+    const roleLabel = role === 'teacher' ? 'Docente' : role === 'student' ? 'Estudiante' : 'Verificando acceso…';
+    const roleBadgeClass = role === 'teacher' ? 'badge--gold' : role === 'student' ? 'badge--aegean' : 'badge--olive';
+    const isActive = session.active ?? session.status !== 'ended';
     sessionHtml = `
       <div class="header__session">
         <span class="badge ${roleBadgeClass}" style="font-size: 0.6rem; padding: 2px 8px;">${roleLabel}</span>
-        ${session.active ?
+        ${isActive ?
         '<span class="live-badge"><span class="live-badge__dot"></span> En sesión</span>' :
         '<span class="badge badge--olive" style="font-size: 0.6rem; padding: 2px 8px;">Finalizada</span>'}
-        <span class="header__session-code" title="${greekCode}">${session.code}</span>
+        <span class="header__session-code" title="${greekCode}">${sessionCode}</span>
       </div>
     `;
   }
@@ -34,7 +36,7 @@ export function renderHeader() {
   }
 
   // Navigate to session if in one, otherwise home
-  const homeHash = session ? `/session/${session.code}` : '/';
+  const homeHash = session ? `/session/${session.join_code || session.code}` : '/';
 
   return `
     <header class="header">
