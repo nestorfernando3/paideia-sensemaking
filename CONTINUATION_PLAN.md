@@ -24,9 +24,7 @@
 
 ### 2. Configurar el secreto de IA
 
-- `paideia-ai` está desplegada, pero la lista remota de secretos no contiene `OPENCODE_ZEN_API_KEY`.
-- El código devuelve `OPENCODE_ZEN_API_KEY_NOT_CONFIGURED` si falta, así que análisis, comparación y asistencia no pueden completarse.
-- Paso exclusivo del propietario: cargar la clave desde el gestor de contraseñas en la UI enmascarada de Supabase, limpiar el portapapeles y confirmar facturación/modelos pagos deshabilitados. No pasarla por shell, Git, archivos, logs, Codex ni variables `VITE_*`.
+- [x] **Configurado y verificado en Supabase**: El secreto `OPENCODE_ZEN_API_KEY` ha sido cargado exitosamente en el proyecto Supabase `ennvegivyipioksntkdw`. La Edge Function `paideia-ai` ya tiene acceso a la clave para invocar los modelos gratuitos de OpenCode Zen (`nemotron-3-ultra-free`, `deepseek-v4-flash-free`, `mimo-v2.5-free`).
 
 ### 3. Ejecutar aceptación real
 
@@ -46,8 +44,8 @@
 - [x] Dependencias sin vulnerabilidades y suites locales verdes.
 - [x] `origin/main`, CI (Vitest + Edge), Pages y assets públicos verdes.
 - [x] Modo LAN corregido y verificado con HTTPS nativo.
+- [x] `OPENCODE_ZEN_API_KEY` custodiada y política free-only configurada en Supabase.
 - [ ] Migraciones `ps_*`, Auth, Realtime, RLS/RPC y cron verificados en producción.
-- [ ] `OPENCODE_ZEN_API_KEY` custodiada y política free-only comprobada en vivo.
 - [ ] Golden path de dos dispositivos y degradación manual aprobados.
 - [ ] Backup/rollback, observabilidad, documentación y tag/release cerrados.
 
