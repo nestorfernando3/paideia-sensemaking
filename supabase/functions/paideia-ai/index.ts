@@ -380,7 +380,7 @@ serve(async (req: Request) => {
         p_input_hash: inputHash,
       },
     });
-    const reserved = Array.isArray(reservedValue)
+    let reserved = Array.isArray(reservedValue)
       ? one(reservedValue, "AI_RESERVATION_FAILED")
       : reservedValue;
     runId = reserved.id;
@@ -401,10 +401,25 @@ serve(async (req: Request) => {
       });
     }
     if (reserved.status === "failed") {
-      return json({
-        error: reserved.error_code ?? "AI_RUN_FAILED",
-        aiRunId: reserved.id,
-      }, 409);
+      // A free model can occasionally return an invalid payload even after the
+      // repair pass. Keep the same idempotent run, but allow a later explicit
+      // request to claim and retry it instead of poisoning this stage forever.
+      const retried = await supabaseRequest<AiRun[]>({
+        url: supabaseUrl,
+        key: serviceKey,
+        path: `ps_ai_runs?id=eq.${reserved.id}&status=eq.failed`,
+        method: "PATCH",
+        body: {
+          status: "pending",
+          error_code: null,
+          completed_at: null,
+        },
+        prefer: "return=representation",
+      });
+      if (retried.length !== 1) {
+        return json({ error: "AI_RUN_IN_PROGRESS", aiRunId: reserved.id }, 409);
+      }
+      reserved = retried[0];
     }
 
     const claimed = await supabaseRequest<AiRun[]>({
