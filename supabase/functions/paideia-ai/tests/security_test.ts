@@ -7,6 +7,7 @@ import { assertAiAuthorization, verifyJwtUser } from "../../_shared/auth.ts";
 import {
   assertAiResult,
   parsePaideiaAiRequest,
+  safePostgrestErrorCode,
 } from "../../_shared/contracts.ts";
 import { redactObjectPII } from "../../_shared/redaction.ts";
 
@@ -115,5 +116,85 @@ Deno.test("request validation and minimization reject IDs and identity-bearing p
       }),
     Error,
     "INVALID_MODEL_RESULT",
+  );
+});
+
+Deno.test("model results enforce nested types, real aliases, canonical columns and intent", () => {
+  const analysis = {
+    summary: "Hay una confusión recurrente.",
+    participation: { submitted: 1, expected: 1 },
+    patterns: [{
+      key: "confusion",
+      label: "Confusión",
+      description: "Se mezclan intención y efecto.",
+      responseIds: ["learner_1"],
+      evidence: [{ responseId: "learner_1", excerpt: "Respuesta breve" }],
+    }],
+    limitations: ["Muestra pequeña"],
+    readiness: { status: "intervene", rationale: "Conviene intervenir." },
+    options: ["one", "two"].map((key) => ({
+      key,
+      title: "Separar dimensiones",
+      rationale: "Hace explícita la distinción.",
+      activity: {
+        type: "three_column",
+        title: "Tres columnas",
+        prompt: "Completa cada columna.",
+        columns: [
+          { key: "said", label: "Qué se dijo" },
+          { key: "intended", label: "Qué se intentó hacer" },
+          { key: "effect", label: "Qué efecto produjo" },
+        ],
+      },
+    })),
+  };
+  const context = { allowedAliasIds: ["learner_1"] };
+  assertAiResult("analyze_stage", analysis, context);
+
+  const inventedAlias = structuredClone(analysis);
+  inventedAlias.patterns[0].evidence[0].responseId = "learner_99";
+  assertThrows(
+    () => assertAiResult("analyze_stage", inventedAlias, context),
+    Error,
+    "INVALID_MODEL_RESULT",
+  );
+
+  const wrongColumns = structuredClone(analysis);
+  wrongColumns.options[0].activity.columns[1].key = "effect";
+  assertThrows(
+    () => assertAiResult("analyze_stage", wrongColumns, context),
+    Error,
+    "INVALID_MODEL_RESULT",
+  );
+
+  assertThrows(
+    () =>
+      assertAiResult("assist_user", {
+        intent: "example",
+        message: "Pista",
+        nextAction: "Continúa",
+        model: "mimo-v2.5-free",
+        isFreeModel: true,
+      }, { expectedIntent: "hint" }),
+    Error,
+    "INVALID_MODEL_RESULT",
+  );
+});
+
+Deno.test("PostgREST errors expose only approved application codes", () => {
+  assertEquals(
+    safePostgrestErrorCode({
+      code: "P0001",
+      message: "RATE_LIMIT_ASSIST_EXCEEDED",
+      details: "sensitive database detail",
+    }, 400),
+    "RATE_LIMIT_ASSIST_EXCEEDED",
+  );
+  assertEquals(
+    safePostgrestErrorCode({
+      code: "23505",
+      message: "duplicate key contains private data",
+    }, 409),
+    "DATABASE_REQUEST_FAILED_409",
   );
 });

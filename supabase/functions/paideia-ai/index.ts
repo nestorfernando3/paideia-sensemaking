@@ -8,6 +8,7 @@ import {
   assertAiResult,
   PaideiaAiRequest,
   parsePaideiaAiRequest,
+  safePostgrestErrorCode,
 } from "../_shared/contracts.ts";
 import {
   createEphemeralPseudonymMap,
@@ -95,7 +96,8 @@ async function supabaseRequest<T>(input: {
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
   });
   if (!response.ok) {
-    throw new Error(`DATABASE_REQUEST_FAILED_${response.status}`);
+    const error = await response.json().catch(() => null);
+    throw new Error(safePostgrestErrorCode(error, response.status));
   }
   if (response.status === 204) return undefined as T;
   return await response.json() as T;
@@ -170,6 +172,7 @@ async function preparePrompts(input: {
   stageRunId: string;
   noticeVersion: string;
   hashMaterial: unknown;
+  allowedAliasIds: string[];
 }> {
   const { request, session, env } = input;
   const context = contextOf(session);
@@ -193,6 +196,7 @@ async function preparePrompts(input: {
       promptVersion: ANALYZE_STAGE_PROMPT_VERSION,
       stageRunId: stage.id,
       noticeVersion: session.collective_ai_notice_version!,
+      allowedAliasIds: Object.values(aliases),
       hashMaterial: {
         ...context,
         stageKind: stage.stage_kind,
@@ -230,6 +234,7 @@ async function preparePrompts(input: {
       promptVersion: COMPARE_LEARNING_PROMPT_VERSION,
       stageRunId: initialStage.id,
       noticeVersion: session.collective_ai_notice_version!,
+      allowedAliasIds: Object.values(aliases),
       hashMaterial: {
         ...context,
         initialResponses: rows.filter((row) =>
@@ -268,6 +273,7 @@ async function preparePrompts(input: {
     promptVersion: ASSIST_USER_PROMPT_VERSION,
     stageRunId: stage.id,
     noticeVersion: session.ai_disclosure_version!,
+    allowedAliasIds: [],
     hashMaterial: {
       ...context,
       intent: request.intent,
@@ -452,7 +458,12 @@ serve(async (req: Request) => {
             isFreeModel: true,
           };
         }
-        assertAiResult(request.operation, candidateResult);
+        assertAiResult(request.operation, candidateResult, {
+          allowedAliasIds: prompts.allowedAliasIds,
+          expectedIntent: request.operation === "assist_user"
+            ? request.intent
+            : undefined,
+        });
         fallbackIndex = i;
         resultJson = candidateResult;
       } catch (error) {
@@ -487,13 +498,11 @@ serve(async (req: Request) => {
     console.log(
       JSON.stringify({
         operation: request.operation,
-        aiRunId: reserved.id,
         requestedModel: eligibleModels[0],
         usedModel,
         fallbackIndex,
         isFreeModel: true,
         status: "succeeded",
-        inputHash,
       }),
     );
     return json({
@@ -521,7 +530,7 @@ serve(async (req: Request) => {
         });
       } catch {
         console.error(
-          JSON.stringify({ operation: "persist_failure", aiRunId: runId }),
+          JSON.stringify({ operation: "persist_failure" }),
         );
       }
     }
@@ -529,6 +538,8 @@ serve(async (req: Request) => {
       ? 401
       : errorCode.includes("REQUIRED") || errorCode.includes("AUTHORIZED")
       ? 403
+      : errorCode.startsWith("RATE_LIMIT_")
+      ? 429
       : errorCode === "FREE_MODEL_UNAVAILABLE"
       ? 503
       : 400;

@@ -1,5 +1,5 @@
 begin;
-select plan(6);
+select plan(10);
 
 select ok(
   not has_function_privilege(
@@ -83,7 +83,72 @@ select is(
   'El reintento idempotente devuelve la ejecución existente'
 );
 
+select throws_ok(
+  $$select public.ps_reserve_ai_run(
+    '10000000-0000-4000-8000-000000000101',
+    '10000000-0000-4000-8000-000000000201', null,
+    'analyze_stage', 'requester', 'nemotron-3-ultra-free',
+    'v1', 'collective-v1', repeat('d', 64)
+  )$$,
+  'P0001', 'INVALID_AI_VISIBILITY',
+  'El análisis colectivo exige visibilidad docente'
+);
+
+select lives_ok(
+  $test$do $block$
+  begin
+    perform public.ps_reserve_ai_run(
+      '10000000-0000-4000-8000-000000000101',
+      '10000000-0000-4000-8000-000000000201', null,
+      'analyze_stage', 'teacher', 'nemotron-3-ultra-free',
+      'v1', 'collective-v1', repeat('e', 64)
+    );
+    perform public.ps_reserve_ai_run(
+      '10000000-0000-4000-8000-000000000101',
+      '10000000-0000-4000-8000-000000000201', null,
+      'analyze_stage', 'teacher', 'deepseek-v4-flash-free',
+      'v1', 'collective-v1', repeat('f', 64)
+    );
+    perform public.ps_reserve_ai_run(
+      '10000000-0000-4000-8000-000000000101',
+      '10000000-0000-4000-8000-000000000201', null,
+      'analyze_stage', 'teacher', 'mimo-v2.5-free',
+      'v1', 'collective-v1', repeat('0', 64)
+    );
+    perform public.ps_reserve_ai_run(
+      '10000000-0000-4000-8000-000000000101',
+      '10000000-0000-4000-8000-000000000201', null,
+      'analyze_stage', 'teacher', 'nemotron-3-ultra-free',
+      'v1', 'collective-v1', repeat('1', 64)
+    );
+  end
+  $block$$test$,
+  'Las reservas válidas alcanzan el límite exacto de análisis'
+);
+
+select throws_ok(
+  $$select public.ps_reserve_ai_run(
+    '10000000-0000-4000-8000-000000000101',
+    '10000000-0000-4000-8000-000000000201', null,
+    'analyze_stage', 'teacher', 'nemotron-3-ultra-free',
+    'v1', 'collective-v1', repeat('2', 64)
+  )$$,
+  'P0001', 'RATE_LIMIT_ANALYZE_EXCEEDED',
+  'La RPC aplica el límite de análisis dentro de la transacción'
+);
+
 set local request.jwt.claim.sub = '10000000-0000-4000-8000-000000000002';
+
+select throws_ok(
+  $$select public.ps_reserve_ai_run(
+    '10000000-0000-4000-8000-000000000101',
+    '10000000-0000-4000-8000-000000000201', null,
+    'analyze_stage', 'teacher', 'nemotron-3-ultra-free',
+    'v1', 'collective-v1', repeat('3', 64)
+  )$$,
+  'P0001', 'TEACHER_REQUIRED',
+  'Un estudiante no puede reservar análisis colectivo'
+);
 
 select throws_ok(
   $$select public.ps_reserve_ai_run(

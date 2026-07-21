@@ -41,6 +41,20 @@ const ASSIST_INTENTS = new Set([
   "example",
   "rewrite_instruction",
 ]);
+const SAFE_POSTGREST_MESSAGES = new Set([
+  "AUTH_REQUIRED",
+  "MEMBER_REQUIRED",
+  "TEACHER_REQUIRED",
+  "SESSION_NOT_ACTIVE",
+  "STAGE_NOT_FOUND",
+  "FREE_MODEL_REQUIRED",
+  "INVALID_AI_RESERVATION",
+  "INVALID_AI_VISIBILITY",
+  "COLLECTIVE_AI_NOT_AUTHORIZED",
+  "FREE_AI_CONSENT_REQUIRED",
+  "RATE_LIMIT_ASSIST_EXCEEDED",
+  "RATE_LIMIT_ANALYZE_EXCEEDED",
+]);
 
 function requiredString(value: unknown, name: string, maxLength = 200): string {
   if (
@@ -113,34 +127,165 @@ export function parsePaideiaAiRequest(value: unknown): PaideiaAiRequest {
   throw new Error("INVALID_OPERATION");
 }
 
+export function safePostgrestErrorCode(
+  value: unknown,
+  status: number,
+): string {
+  if (
+    isRecord(value) && value.code === "P0001" &&
+    typeof value.message === "string" &&
+    SAFE_POSTGREST_MESSAGES.has(value.message)
+  ) return value.message;
+  return `DATABASE_REQUEST_FAILED_${status}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function containsHtml(value: unknown): boolean {
-  if (typeof value === "string") return /<\/?[a-z][^>]*>/i.test(value);
-  if (Array.isArray(value)) return value.some(containsHtml);
-  return isRecord(value) && Object.values(value).some(containsHtml);
+function invalidResult(): never {
+  throw new Error("INVALID_MODEL_RESULT");
 }
 
-export function assertAiResult(operation: AiOperation, value: unknown): void {
-  if (!isRecord(value) || containsHtml(value)) {
-    throw new Error("INVALID_MODEL_RESULT");
+function resultString(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0 || /[<>]/.test(value)) {
+    invalidResult();
   }
+  return value;
+}
 
-  const valid = operation === "analyze_stage"
-    ? typeof value.summary === "string" && isRecord(value.participation) &&
-      Array.isArray(value.patterns) &&
-      Array.isArray(value.limitations) && isRecord(value.readiness) &&
-      Array.isArray(value.options)
-    : operation === "compare_learning"
-    ? typeof value.summary === "string" &&
-      Array.isArray(value.observedChanges) &&
-      Array.isArray(value.persistentDifficulties) &&
-      Array.isArray(value.limitations) && isRecord(value.recommendation)
-    : typeof value.intent === "string" && typeof value.message === "string" &&
-      typeof value.nextAction === "string" && typeof value.model === "string" &&
-      value.isFreeModel === true;
+function resultRecord(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) invalidResult();
+  return value;
+}
 
-  if (!valid) throw new Error("INVALID_MODEL_RESULT");
+function resultArray(value: unknown): unknown[] {
+  if (!Array.isArray(value)) invalidResult();
+  return value;
+}
+
+function stringArray(value: unknown, aliases?: Set<string>): void {
+  for (const entry of resultArray(value)) {
+    const parsed = resultString(entry);
+    if (aliases && !aliases.has(parsed)) invalidResult();
+  }
+}
+
+function assertThreeColumnActivity(value: unknown): void {
+  const activity = resultRecord(value);
+  if (activity.type !== "three_column") invalidResult();
+  resultString(activity.title);
+  resultString(activity.prompt);
+  const columns = resultArray(activity.columns);
+  const keys = ["said", "intended", "effect"];
+  if (columns.length !== keys.length) invalidResult();
+  columns.forEach((column, index) => {
+    const parsed = resultRecord(column);
+    if (parsed.key !== keys[index]) invalidResult();
+    resultString(parsed.label);
+  });
+}
+
+function assertStageAnalysis(
+  value: Record<string, unknown>,
+  aliases: Set<string>,
+): void {
+  resultString(value.summary);
+  const participation = resultRecord(value.participation);
+  if (
+    !Number.isInteger(participation.submitted) ||
+    Number(participation.submitted) < 0 ||
+    (participation.expected !== null &&
+      (!Number.isInteger(participation.expected) ||
+        Number(participation.expected) < 0))
+  ) invalidResult();
+
+  for (const patternValue of resultArray(value.patterns)) {
+    const pattern = resultRecord(patternValue);
+    resultString(pattern.key);
+    resultString(pattern.label);
+    resultString(pattern.description);
+    stringArray(pattern.responseIds, aliases);
+    for (const evidenceValue of resultArray(pattern.evidence)) {
+      const evidence = resultRecord(evidenceValue);
+      const responseId = resultString(evidence.responseId);
+      if (!aliases.has(responseId)) invalidResult();
+      resultString(evidence.excerpt);
+    }
+  }
+  stringArray(value.limitations);
+  const readiness = resultRecord(value.readiness);
+  if (
+    !["advance", "intervene", "insufficient_evidence"].includes(
+      String(readiness.status),
+    )
+  ) invalidResult();
+  resultString(readiness.rationale);
+  const options = resultArray(value.options);
+  if (options.length < 2 || options.length > 4) invalidResult();
+  for (const optionValue of options) {
+    const option = resultRecord(optionValue);
+    resultString(option.key);
+    resultString(option.title);
+    resultString(option.rationale);
+    assertThreeColumnActivity(option.activity);
+  }
+}
+
+function assertLearningComparison(
+  value: Record<string, unknown>,
+  aliases: Set<string>,
+): void {
+  resultString(value.summary);
+  for (const changeValue of resultArray(value.observedChanges)) {
+    const change = resultRecord(changeValue);
+    resultString(change.label);
+    resultString(change.description);
+    stringArray(change.initialEvidenceIds, aliases);
+    stringArray(change.transferEvidenceIds, aliases);
+  }
+  for (const difficultyValue of resultArray(value.persistentDifficulties)) {
+    const difficulty = resultRecord(difficultyValue);
+    resultString(difficulty.label);
+    resultString(difficulty.description);
+    stringArray(difficulty.responseIds, aliases);
+  }
+  stringArray(value.limitations);
+  const recommendation = resultRecord(value.recommendation);
+  if (
+    !["advance", "reinforce", "insufficient_evidence"].includes(
+      String(recommendation.status),
+    )
+  ) invalidResult();
+  resultString(recommendation.rationale);
+}
+
+export function assertAiResult(
+  operation: AiOperation,
+  value: unknown,
+  context: {
+    allowedAliasIds?: string[];
+    expectedIntent?: Extract<
+      PaideiaAiRequest,
+      { operation: "assist_user" }
+    >["intent"];
+  } = {},
+): void {
+  const result = resultRecord(value);
+  const aliases = new Set(context.allowedAliasIds ?? []);
+
+  if (operation === "analyze_stage") {
+    return assertStageAnalysis(result, aliases);
+  }
+  if (operation === "compare_learning") {
+    return assertLearningComparison(result, aliases);
+  }
+  if (!context.expectedIntent || result.intent !== context.expectedIntent) {
+    invalidResult();
+  }
+  resultString(result.message);
+  resultString(result.nextAction);
+  if (result.boundaryNotice !== undefined) resultString(result.boundaryNotice);
+  resultString(result.model);
+  if (result.isFreeModel !== true) invalidResult();
 }
