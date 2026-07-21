@@ -1,10 +1,15 @@
 // ==========================================================================
 // PAIDEIA Sensemaking — Stage View
-// Vista de etapa activa con renderizado declarativo y envío de respuestas
+// Vista de etapa activa con renderizado declarativo, asistente e IA gratuita
 // ==========================================================================
 
 import { renderHeader } from '../components/header.js';
 import { renderActivity } from '../components/activityRenderer.js';
+import {
+  renderAssistantPanel,
+  renderAssistantResponse,
+  renderAssistantError,
+} from '../components/assistantPanel.js';
 import {
   getSensemakingSession,
   listStageRuns,
@@ -12,6 +17,7 @@ import {
   submitStageResponse,
   subscribeToSession,
 } from '../services/sessionService.js';
+import { requestUserAssistance } from '../services/aiService.js';
 import { getCurrentRole, isTeacher, getStudentId } from '../utils/session.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
 
@@ -57,11 +63,17 @@ export async function initStage(sessionId, stageRunId) {
     return;
   }
 
-  const role = getCurrentRole();
+  const role = getCurrentRole() || 'student';
   const teacher = isTeacher();
   const isActive = stageRun.status === 'active';
+  const aiEnabled = Boolean(session.allow_free_ai_assistance);
 
   const activityHtml = renderActivity(stageRun.activity_spec);
+  const assistantHtml = renderAssistantPanel({
+    enabled: aiEnabled,
+    role: teacher ? 'teacher' : 'student',
+    usesCount: 0,
+  });
 
   if (loadingEl) loadingEl.style.display = 'none';
   contentEl.style.display = 'block';
@@ -98,8 +110,46 @@ export async function initStage(sessionId, stageRunId) {
           </button>
         </div>
       </form>
+
+      ${assistantHtml}
     </div>
   `;
+
+  // Assistant button click handlers
+  const assistButtons = contentEl.querySelectorAll('.assist-btn');
+  const responseArea = contentEl.querySelector('#assistant-response-area');
+
+  assistButtons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const intent = btn.getAttribute('data-intent');
+      if (!intent) return;
+
+      btn.disabled = true;
+      if (responseArea) {
+        responseArea.style.display = 'block';
+        responseArea.innerHTML = '<p class="hint">Consultando modelo gratuito...</p>';
+      }
+
+      try {
+        const assistance = await requestUserAssistance({
+          sessionId,
+          stageRunId: stageRun.id,
+          intent,
+        });
+
+        if (responseArea) {
+          responseArea.innerHTML = renderAssistantResponse(assistance);
+        }
+      } catch (err) {
+        console.error(err);
+        if (responseArea) {
+          responseArea.innerHTML = renderAssistantError(err?.message || 'ERROR');
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 
   // Realtime subscription to session active_stage_run_id changes for students
   if (!teacher) {
