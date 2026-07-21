@@ -114,6 +114,52 @@ function safeErrorCode(error: unknown): string {
   return /^[A-Z][A-Z0-9_]*(?:_\d{3})?$/.test(code) ? code : "UNEXPECTED_ERROR";
 }
 
+function cachedAliasIds(operation: PaideiaAiRequest["operation"], value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const result = value as Record<string, unknown>;
+  const aliases = new Set<string>();
+  const addStrings = (candidate: unknown) => {
+    if (!Array.isArray(candidate)) return;
+    candidate.forEach((entry) => {
+      if (typeof entry === "string") aliases.add(entry);
+    });
+  };
+
+  if (operation === "analyze_stage" && Array.isArray(result.patterns)) {
+    result.patterns.forEach((candidate) => {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return;
+      const pattern = candidate as Record<string, unknown>;
+      addStrings(pattern.responseIds);
+      if (Array.isArray(pattern.evidence)) {
+        pattern.evidence.forEach((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) return;
+          const responseId = (item as Record<string, unknown>).responseId;
+          if (typeof responseId === "string") aliases.add(responseId);
+        });
+      }
+    });
+  }
+
+  if (operation === "compare_learning") {
+    if (Array.isArray(result.observedChanges)) {
+      result.observedChanges.forEach((candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return;
+        const change = candidate as Record<string, unknown>;
+        addStrings(change.initialEvidenceIds);
+        addStrings(change.transferEvidenceIds);
+      });
+    }
+    if (Array.isArray(result.persistentDifficulties)) {
+      result.persistentDifficulties.forEach((candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return;
+        addStrings((candidate as Record<string, unknown>).responseIds);
+      });
+    }
+  }
+
+  return [...aliases];
+}
+
 async function loadStage(
   env: { url: string; serviceKey: string },
   sessionId: string,
@@ -387,7 +433,10 @@ serve(async (req: Request) => {
 
     if (reserved.status === "succeeded") {
       assertAiResult(request.operation, reserved.result, {
-        allowedAliasIds: prompts.allowedAliasIds,
+        // The stored result was validated against the ephemeral aliases before
+        // persistence. A cache hit must reuse those aliases: a fresh prompt
+        // intentionally generates a different random pseudonym map.
+        allowedAliasIds: cachedAliasIds(request.operation, reserved.result),
         expectedIntent: request.operation === "assist_user"
           ? request.intent
           : undefined,
