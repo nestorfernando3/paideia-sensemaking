@@ -1,8 +1,8 @@
-# Paideia — Παιδεία
+# Paideia Sensemaking — Παιδεία
 
 > Suite de herramientas pedagógicas para el florecimiento del aprendizaje
 
-**Paideia** (Παιδεία) es una aplicación web inspirada en la tradición griega de formación integral. Permite a docentes y estudiantes interactuar en tiempo real durante las clases a través de 7 herramientas pedagógicas diseñadas para mejorar la metacognición, la comprensión y la reflexión.
+**Paideia Sensemaking** es una aplicación web independiente para evaluación formativa. Organiza respuestas de aula en etapas, analiza evidencia consentida con IA gratuita y deja la decisión pedagógica en manos del docente.
 
 Estado actual:
 - **Modo online** con Supabase
@@ -19,7 +19,7 @@ Estado actual:
 
 ## 🌿 Demo
 
-👉 **[Abrir Paideia](https://nestorfernando3.github.io/paideia/)**
+👉 **[Abrir Paideia Sensemaking](https://nestorfernando3.github.io/paideia-sensemaking/)**
 
 ## 🏛️ Herramientas
 
@@ -36,16 +36,16 @@ Estado actual:
 ## 🚀 Uso Rápido
 
 ### Como Docente
-1. Abre Paideia y haz clic en **"Crear sesión de clase"**
-2. Ingresa el tema y selecciona las herramientas
-3. Comparte el **código de 4 letras** o el **QR** con tus estudiantes
-4. Monitorea las respuestas en tiempo real
+1. Abre Paideia Sensemaking en `/new-session` y crea la sesión
+2. Define tema, objetivo, criterio de éxito y consentimiento de IA
+3. Activa una etapa y comparte el **código de 6 caracteres**
+4. Revisa el análisis, elige una intervención y compara la transferencia
 
 ### Como Estudiante
-1. Abre Paideia y haz clic en **"Unirse como estudiante"**
-2. Ingresa el código de la sesión
-3. El sistema te guía automáticamente por las actividades de la clase
-4. Al finalizar, completa tu reflexión final en Gnosis
+1. Abre Paideia Sensemaking en `/join`
+2. Ingresa el código de 6 caracteres
+3. Responde la etapa activa desde tu dispositivo
+4. Solicita ayuda gratuita solo si existe consentimiento individual
 
 ## ✨ Características Principales
 
@@ -67,8 +67,8 @@ Los estudiantes son guiados automáticamente a través de las herramientas activ
 - Sincronización multi-dispositivo mediante **Supabase Postgres + Realtime**
 - Autenticación anónima automática
 - Actualización en vivo en vistas docentes
-- Persistencia desacoplada en `sessions` + `tool_entries`
-- Código de acceso docente para proteger la creación de sesiones
+- Persistencia principal en tablas `ps_*`, RPC y RLS; las tablas clásicas quedan como compatibilidad legacy
+- Rol docente derivado de la membresía de la sesión, sin contraseña literal en frontend
 
 ### 📄 Exportación PDF (v1.1)
 - Reportes profesionales descargables con un solo clic
@@ -110,7 +110,7 @@ Paideia incluye un servidor independiente que permite usar la aplicación en una
 
 ```bash
 # Clonar
-git clone https://github.com/nestorfernando3/paideia.git
+git clone https://github.com/nestorfernando3/paideia-sensemaking.git
 
 # Instalar dependencias
 npm install
@@ -136,14 +136,10 @@ VITE_SUPABASE_ANON_KEY=...
 
 1. Crea un proyecto en Supabase.
 2. Activa `Authentication > Providers > Anonymous`.
-3. Ejecuta el SQL de [supabase/schema.sql](./supabase/schema.sql).
+3. Ejecuta las migraciones de [supabase/migrations](./supabase/migrations) con Supabase CLI.
 4. Copia la URL del proyecto y la `anon key` a `.env`.
 
-El esquema crea:
-- `sessions`
-- `tool_entries`
-- políticas RLS para usuarios autenticados anónimamente
-- publicación Realtime para ambas tablas
+El esquema Sensemaking crea tablas `ps_*`, RPC de sesión/etapas/IA, políticas RLS y publicaciones Realtime. `sessions` y `tool_entries` se conservan únicamente para compatibilidad con el flujo clásico.
 
 ### GitHub Pages
 
@@ -156,8 +152,8 @@ VITE_SUPABASE_ANON_KEY
 
 ## 📖 Guías
 
-- **[Guía del Docente](https://nestorfernando3.github.io/paideia/#/guia-docente)** — Manual completo con tips pedagógicos
-- **[Guía del Estudiante](https://nestorfernando3.github.io/paideia/#/guia-estudiante)** — Instrucciones simples para alumnos
+- **[Guía del Docente](https://nestorfernando3.github.io/paideia-sensemaking/#/guia-docente)** — Manual completo con tips pedagógicos
+- **[Guía del Estudiante](https://nestorfernando3.github.io/paideia-sensemaking/#/guia-estudiante)** — Instrucciones simples para alumnos
 
 ## 🧪 Validación Reciente
 
@@ -166,6 +162,7 @@ VITE_SUPABASE_ANON_KEY
 - Persistencia de respuestas en `Gnosis`, `Noesis` y `Aporia`
 - Persistencia de dudas y votos validada en `tool_entries`
 - Build de producción validado con `npm run build`
+- Vitest 48/48, Deno Edge 15/15 y pgTAP 103/103
 
 ## 🤝 Comunidad
 

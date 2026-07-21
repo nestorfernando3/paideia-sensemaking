@@ -3,30 +3,26 @@
 ## Punto de entrada
 
 - Repositorio: `/Users/nestor/Documents/Paideia Hackaton`
-- Rama/HEAD: `main` / `9c1d797`
+- Rama/HEAD: `main` / `6424b23`
 - Worktree: limpio al pausar.
-- `main` está 13 commits por delante de `origin/main`; no hacer push sin una decisión explícita.
+- `main` está 31 commits por delante de `origin/main`; no hacer push sin una decisión explícita.
 - `upstream` es `https://github.com/nestorfernando3/paideia.git` con push `DISABLED`.
 - Continuar desde `2026-07-20-paideia-sensemaking-implementation-plan.md`.
 
 ## Ya terminado y aprobado
 
 - Tarea 1: commits `2cb460e`, `a44bc36`; identidad independiente, Vitest/jsdom, CI, smoke test; `npm run verify` pasa.
-- Tarea 2: commits `c5a47ed`, `7a7751c`, `327dcce`, `de26225`, `229fd80`; esquema `ps_*`, RPC, RLS, Anonymous Auth, consentimiento, purga, auditoría y upgrade `001 → legacy → 002`.
-- Gate A: revisión read-only final con Spec Approved y Task quality Approved.
-- Evidencia: 93/93 pgTAP PASS; fixture incremental PASS y restauración del esquema latest con exit 0.
+- Tarea 2: commits `c5a47ed`, `7a7751c`, `327dcce`, `de26225`, `229fd80`; esquema `ps_*`, RPC, RLS, Anonymous Auth, consentimiento, purga, auditoría y upgrade incremental.
+- Tareas 3–14: commits `12f6552`…`9e5db49`; contratos, realtime, sesiones, Edge Zen, IA pedagógica, transferencia y documentación.
+- Hardening posterior: `be07250`, `024a73e`, `a05f684`, `a18d89f`, `422d463`, `6424b23`; migraciones `001→002→003→004`, Edge seguro y acceso docente verificado.
+- Gate A: aprobado tras revisión read-only GREEN.
+- Evidencia actual: 103/103 pgTAP, 15/15 Deno, 48/48 Vitest, build PASS y fixtures de upgrade/restauración PASS.
 
-## Siguiente tarea: Tarea 3
+## Punto exacto de reanudación
 
-Implementar con TDD:
+La implementación funcional y el hardening están completos. El siguiente paso es ejecutar la auditoría final completa y decidir si se publica `main`; no hay una tarea de código pendiente.
 
-1. Instalar `zod@^3.24.2`.
-2. Crear `src/domain/activitySchemas.js`, `src/domain/aiSchemas.js` y `src/utils/redaction.js`.
-3. Crear `tests/unit/activitySchemas.test.js`, `tests/unit/aiSchemas.test.js` y `tests/unit/redaction.test.js`.
-4. Validar contratos completos, rechazar `<`/`>` en textos de IA, redactar correo/teléfono y truncar a 2000 caracteres.
-5. Ejecutar pruebas enfocadas y `npm run test`.
-6. Crear commit: `feat: define validated pedagogical and AI contracts`.
-7. Solicitar revisión read-only de Spec Compliance y Task Quality antes de Tarea 4.
+Commits de verificación más recientes: `a18d89f`, `422d463`, `6424b23`.
 
 No usar `.superpowers/sdd/task-3-report.md` como evidencia: es un reporte antiguo de fase cero. El plan versionado es la fuente autoritativa.
 

@@ -5,7 +5,7 @@
 - **Categoría:** Educación / Evaluación Formativa
 - **Nombre:** Paideia Sensemaking
 - **Repositorio:** `nestorfernando3/paideia-sensemaking`
-- **Despliegue:** `https://nestorfernando3/github.io/paideia-sensemaking/`
+- **Despliegue:** `https://nestorfernando3.github.io/paideia-sensemaking/`
 - **Session ID Feedback:** `80238be9-ac49-48f2-a123-17f62364a22a`
 
 ## Procedencia y Desarrollo
@@ -33,6 +33,7 @@
 
 ## Verificación Técnica
 
-- Pruebas Unitarias Vitest: 43/43 PASS
-- Pruebas Deno Edge Function: 7/7 PASS
+- Pruebas Unitarias Vitest: 48/48 PASS
+- Pruebas Deno Edge Function: 15/15 PASS
+- Pruebas pgTAP: 103/103 PASS
 - Compilación Vite: Exit code 0
