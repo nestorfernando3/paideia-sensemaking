@@ -1,5 +1,5 @@
 // ==========================================================================
-// PAIDEIA — Main Application
+// PAIDEIA Sensemaking — Main Application
 // SPA Router + App Initialization
 // ==========================================================================
 
@@ -7,6 +7,7 @@ import { renderHome, initHome } from './views/home.js';
 import { renderNewSession, initNewSession } from './views/newSession.js';
 import { renderStudentJoin, initStudentJoin } from './views/student.js';
 import { renderSession, initSession } from './views/session.js';
+import { renderStage, initStage } from './views/stage.js';
 import { renderGnosis, initGnosis } from './views/gnosis.js';
 import { renderEikasia, initEikasia } from './views/eikasia.js';
 import { renderAporia, initAporia } from './views/aporia.js';
@@ -58,8 +59,18 @@ function navigate() {
         return;
     }
 
+    // Stage route: /session/:sessionId/stage/:stageRunId
+    const stageMatch = path.match(/^\/session\/([0-9a-f-]+)\/stage\/([0-9a-f-]+)$/i);
+    if (stageMatch) {
+        const [, sessionId, stageRunId] = stageMatch;
+        app.innerHTML = renderStage(sessionId, stageRunId);
+        initStage(sessionId, stageRunId);
+        window.scrollTo(0, 0);
+        return;
+    }
+
     // Session route: /session/:code
-    const sessionMatch = path.match(/^\/session\/([A-Z]+)$/i);
+    const sessionMatch = path.match(/^\/session\/([a-z0-9-]+)$/i);
     if (sessionMatch) {
         app.innerHTML = renderSession(sessionMatch[1].toUpperCase());
         initSession();
