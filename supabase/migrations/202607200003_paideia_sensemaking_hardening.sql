@@ -195,19 +195,19 @@ where ranked.id = stage.id
 insert into public.ps_migration_audit (
   migration_version, reason, affected_rows
 )
-select '202607200002', 'stages_deleted_during_hardening',
+select '202607200003', 'stages_deleted_during_hardening',
        row_count - (select count(*) from public.ps_stage_runs)
 from ps_upgrade_pre_counts where object_name = 'ps_stage_runs'
 union all
-select '202607200002', 'responses_deleted_during_hardening',
+select '202607200003', 'responses_deleted_during_hardening',
        row_count - (select count(*) from public.ps_responses)
 from ps_upgrade_pre_counts where object_name = 'ps_responses'
 union all
-select '202607200002', 'ai_runs_deleted_during_hardening',
+select '202607200003', 'ai_runs_deleted_during_hardening',
        row_count - (select count(*) from public.ps_ai_runs)
 from ps_upgrade_pre_counts where object_name = 'ps_ai_runs'
 union all
-select '202607200002', 'teacher_decisions_deleted_during_hardening',
+select '202607200003', 'teacher_decisions_deleted_during_hardening',
        row_count - (select count(*) from public.ps_teacher_decisions)
 from ps_upgrade_pre_counts where object_name = 'ps_teacher_decisions';
 
@@ -561,11 +561,11 @@ begin
   )
   values
     (
-      '202607200002', 'ai_results_cleared_by_upgrade_purge',
+      '202607200003', 'ai_results_cleared_by_upgrade_purge',
       cleared_ai_results
     ),
     (
-      '202607200002', 'responses_deleted_by_upgrade_purge',
+      '202607200003', 'responses_deleted_by_upgrade_purge',
       deleted_responses
     );
 
