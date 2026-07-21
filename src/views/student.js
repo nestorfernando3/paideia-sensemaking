@@ -59,6 +59,19 @@ export function renderStudentJoin() {
             <input type="text" id="student-name" class="input" placeholder="Ej: Ana Lucía" required />
           </div>
 
+          <fieldset class="ai-config-box" style="margin: var(--space-lg) 0; padding: var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+            <legend style="font-weight: 700; padding: 0 6px;">Consentimiento de IA externa gratuita</legend>
+            <label class="checkbox-label" style="display: flex; gap: 8px; align-items: flex-start; margin-bottom: 12px; cursor: pointer;">
+              <input type="checkbox" id="consent-free-ai" />
+              <span>Acepto solicitar ayudas individuales desidentificadas. Puedo continuar sin activarlas.</span>
+            </label>
+            <label class="checkbox-label" style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;">
+              <input type="checkbox" id="consent-collective-ai" />
+              <span>Acepto que mis respuestas minimizadas y desidentificadas se incluyan en el análisis colectivo. Puedo participar sin aceptar.</span>
+            </label>
+            <p class="hint" style="margin-top: 10px;">No escribas nombres, correos, teléfonos ni información sensible. Puedes cambiar tu elección volviendo a ingresar a la sesión.</p>
+          </fieldset>
+
           <button type="submit" class="btn btn--gold btn--lg btn--full" id="join-btn">
             Entrar a la sesión
           </button>
@@ -107,7 +120,10 @@ export function initStudentJoin() {
 
     try {
       if (code.length === 6) {
-        session = await joinSensemakingSession(code, name);
+        session = await joinSensemakingSession(code, name, {
+          allowFreeAiAssistance: document.getElementById('consent-free-ai')?.checked || false,
+          allowCollectiveExternalAi: document.getElementById('consent-collective-ai')?.checked || false,
+        });
       } else {
         session = await joinSessionAsync(code);
       }

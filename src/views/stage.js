@@ -14,11 +14,13 @@ import {
   getSensemakingSession,
   listStageRuns,
   activateStage,
+  createTransferStage,
   submitStageResponse,
   subscribeToSession,
+  getCurrentMembership,
 } from '../services/sessionService.js';
 import { requestUserAssistance } from '../services/aiService.js';
-import { getCurrentRole, isTeacher, getStudentId } from '../utils/session.js';
+import { getCurrentRole, isTeacher } from '../utils/session.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
 
 export function renderStage(sessionId, stageRunId) {
@@ -40,10 +42,14 @@ export async function initStage(sessionId, stageRunId) {
 
   let session = null;
   let stageRuns = [];
+  let membership = null;
 
   try {
-    session = await getSensemakingSession(sessionId);
-    stageRuns = await listStageRuns(sessionId);
+    [session, stageRuns, membership] = await Promise.all([
+      getSensemakingSession(sessionId),
+      listStageRuns(sessionId),
+      getCurrentMembership(sessionId),
+    ]);
   } catch (err) {
     console.error(err);
     if (loadingEl) {
@@ -66,7 +72,10 @@ export async function initStage(sessionId, stageRunId) {
   const role = getCurrentRole() || 'student';
   const teacher = isTeacher();
   const isActive = stageRun.status === 'active';
-  const aiEnabled = Boolean(session.allow_free_ai_assistance);
+  const aiEnabled = Boolean(
+    session.allow_free_ai_assistance && membership?.free_ai_consent_at
+  );
+  const initialStage = stageRuns.find((stage) => stage.stage_kind === 'initial_response');
 
   const activityHtml = renderActivity(stageRun.activity_spec);
   const assistantHtml = renderAssistantPanel({
@@ -100,16 +109,41 @@ export async function initStage(sessionId, stageRunId) {
         </div>
       </header>
 
-      <form id="stage-response-form" class="animate-slide-up" style="margin-top: var(--space-lg);">
-        ${activityHtml}
+      ${teacher ? `
+        <section class="animate-slide-up" style="margin-top: var(--space-lg);">
+          ${activityHtml}
+          ${isActive && stageRun.stage_kind === 'initial_response' ? `
+            <a class="btn btn--gold btn--lg" style="margin-top: var(--space-lg);" href="#/session/${sessionId}/analysis/${stageRun.id}">
+              Analizar respuestas con IA gratuita
+            </a>
+          ` : ''}
+          ${isActive && stageRun.stage_kind === 'intervention' ? `
+            <form id="transfer-stage-form" style="margin-top: var(--space-xl);">
+              <div class="input-group">
+                <label for="transfer-case">Caso nuevo para verificar transferencia</label>
+                <textarea id="transfer-case" class="input" rows="3" maxlength="1200" required placeholder="Escribe un caso diferente que exija aplicar lo aprendido"></textarea>
+              </div>
+              <button type="submit" class="btn btn--gold btn--lg">Crear y activar transferencia</button>
+            </form>
+          ` : ''}
+          ${isActive && stageRun.stage_kind === 'transfer' && initialStage ? `
+            <a class="btn btn--gold btn--lg" style="margin-top: var(--space-lg);" href="#/session/${sessionId}/comparison/${initialStage.id}/${stageRun.id}">
+              Comparar aprendizaje antes/después
+            </a>
+          ` : ''}
+        </section>
+      ` : `
+        <form id="stage-response-form" class="animate-slide-up" style="margin-top: var(--space-lg);">
+          ${activityHtml}
 
-        <div style="margin-top: var(--space-xl); display: flex; justify-content: space-between; align-items: center;">
-          <div id="response-status" style="font-size: var(--text-sm); color: var(--color-gold);"></div>
-          <button type="submit" class="btn btn--gold btn--lg" id="submit-response-btn" ${!isActive && !teacher ? 'disabled' : ''}>
-            Enviar respuesta
-          </button>
-        </div>
-      </form>
+          <div style="margin-top: var(--space-xl); display: flex; justify-content: space-between; align-items: center;">
+            <div id="response-status" style="font-size: var(--text-sm); color: var(--color-gold);"></div>
+            <button type="submit" class="btn btn--gold btn--lg" id="submit-response-btn" ${!isActive ? 'disabled' : ''}>
+              Enviar respuesta
+            </button>
+          </div>
+        </form>
+      `}
 
       ${assistantHtml}
     </div>
@@ -179,6 +213,48 @@ export async function initStage(sessionId, stageRunId) {
     });
   }
 
+  const transferForm = document.getElementById('transfer-stage-form');
+  if (transferForm) {
+    transferForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const caseText = document.getElementById('transfer-case')?.value.trim();
+      if (!caseText) return;
+
+      const button = transferForm.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Activando transferencia...';
+      }
+
+      try {
+        const transferStage = await createTransferStage({
+          sessionId,
+          activitySpec: {
+            type: 'transfer_justification',
+            title: 'Verificación de transferencia',
+            prompt: 'Aplica las tres dimensiones del acto de habla al caso nuevo.',
+            caseText,
+            fields: [
+              { key: 'said', label: 'Qué se dijo' },
+              { key: 'intended', label: 'Qué se intentó hacer' },
+              { key: 'effect', label: 'Qué efecto produjo' },
+              { key: 'justification', label: 'Explica por qué' },
+            ],
+          },
+        });
+        await activateStage(transferStage.id);
+        window.location.hash = `/session/${sessionId}/stage/${transferStage.id}`;
+      } catch (err) {
+        console.error(err);
+        alert(getOnlineSessionErrorMessage(err, 'crear la transferencia'));
+        if (button) {
+          button.disabled = false;
+          button.textContent = 'Crear y activar transferencia';
+        }
+      }
+    });
+  }
+
   // Response form submit
   const form = document.getElementById('stage-response-form');
   if (form) {
@@ -199,11 +275,9 @@ export async function initStage(sessionId, stageRunId) {
       }
 
       try {
-        const userId = getStudentId();
         await submitStageResponse({
           sessionId,
           stageRunId: stageRun.id,
-          userId,
           payload,
         });
 

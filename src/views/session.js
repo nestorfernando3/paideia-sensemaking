@@ -11,6 +11,8 @@ import { staggerChildren } from '../utils/animations.js';
 import { backend } from '../utils/backend.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
 import { initLiveSessionSync } from '../utils/live.js';
+import { endSensemakingSession, listStageRuns } from '../services/sessionService.js';
+import { escapeHtml } from '../utils/escapeHtml.js';
 
 export function renderSession(code) {
   let session = getCurrentSession();
@@ -50,7 +52,9 @@ export function renderSession(code) {
   const dashboardTools = featuredTool
     ? [featuredTool, ...activeTools.filter(tool => tool.id !== featuredTool.id)]
     : activeTools;
-  const toolCards = dashboardTools.map((tool, index) => renderSessionModuleCard(tool, {
+  const toolCards = session.id
+    ? '<p class="hint">Cargando etapas Sensemaking…</p>'
+    : dashboardTools.map((tool, index) => renderSessionModuleCard(tool, {
     featured: index === 0,
     dark: tool.id === 'logos',
     order: index + 1,
@@ -162,6 +166,39 @@ function renderSessionModuleCard(tool, { featured = false, dark = false, order =
   `;
 }
 
+export function renderSensemakingFlow(stages, role, sessionId) {
+  const visibleStages = role === 'teacher'
+    ? stages
+    : stages.filter((stage) => stage.status === 'active');
+
+  if (visibleStages.length === 0) {
+    return `<p class="hint">${role === 'teacher'
+      ? 'La sesión todavía no tiene etapas disponibles.'
+      : 'Espera a que el docente active la siguiente etapa.'}</p>`;
+  }
+
+  const labels = {
+    initial_response: 'Interpretación inicial',
+    intervention: 'Intervención pedagógica',
+    transfer: 'Caso de transferencia',
+    reflection: 'Reflexión final',
+  };
+
+  return visibleStages.map((stage) => `
+    <a class="session-module-card ${stage.status === 'active' ? 'session-module-card--featured' : ''}"
+       href="#/session/${sessionId}/stage/${stage.id}"
+       aria-label="${labels[stage.stage_kind] || 'Etapa Sensemaking'} ${stage.sequence_number}">
+      <span class="session-module-card__watermark" aria-hidden="true">Σ</span>
+      <div class="session-module-card__meta">
+        <span class="session-module-card__kicker">Etapa ${stage.sequence_number} · ${stage.status}</span>
+        <h3 class="session-module-card__title">${labels[stage.stage_kind] || stage.stage_kind}</h3>
+      </div>
+      <p class="session-module-card__description">${escapeHtml(stage.activity_spec?.title || 'Actividad Sensemaking')}</p>
+      <span class="session-module-card__cta">Abrir →</span>
+    </a>
+  `).join('');
+}
+
 export async function initSession() {
   initLiveSessionSync();
   staggerChildren('#session-tools .session-module-card', 80);
@@ -174,6 +211,20 @@ export async function initSession() {
       window.dispatchEvent(new HashChangeEvent('hashchange'));
       return;
     }
+
+    const flowEl = document.getElementById('session-tools');
+    if (flowEl) {
+      try {
+        flowEl.innerHTML = renderSensemakingFlow(
+          await listStageRuns(session.id),
+          role,
+          session.id
+        );
+      } catch (error) {
+        console.error(error);
+        flowEl.innerHTML = `<p class="error">${getOnlineSessionErrorMessage(error, 'cargar las etapas')}</p>`;
+      }
+    }
   }
 
   const endBtn = document.getElementById('end-session-btn');
@@ -183,7 +234,11 @@ export async function initSession() {
       if (!s) return;
       if (confirm('¿Estás seguro de que deseas finalizar la sesión?')) {
         try {
-          await endSession(s.join_code || s.code);
+          if (s.id) {
+            await endSensemakingSession(s.id);
+          } else {
+            await endSession(s.join_code || s.code);
+          }
           clearCurrentSession();
           window.location.hash = '/';
         } catch (error) {

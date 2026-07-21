@@ -56,13 +56,42 @@ export async function createSensemakingSession({
   }
 }
 
-export async function joinSensemakingSession(joinCode, displayName) {
+export async function joinSensemakingSession(joinCode, displayName, {
+  allowFreeAiAssistance = false,
+  allowCollectiveExternalAi = false,
+} = {}) {
   const { data, error } = await supabase.rpc("ps_join_session", {
     p_join_code: joinCode,
     p_display_name: displayName,
   });
 
   if (error) throw error;
+
+  if (data?.allow_free_ai_assistance || data?.allow_collective_external_ai) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("AUTH_REQUIRED");
+
+    const now = new Date().toISOString();
+    const { error: consentError } = await supabase
+      .from("ps_members")
+      .update({
+        free_ai_consent_at:
+          data.allow_free_ai_assistance && allowFreeAiAssistance ? now : null,
+        collective_external_ai_consent_at:
+          data.allow_collective_external_ai && allowCollectiveExternalAi ? now : null,
+        collective_external_ai_consent_version:
+          data.allow_collective_external_ai && allowCollectiveExternalAi
+            ? data.collective_ai_notice_version
+            : null,
+        collective_external_ai_consent_revoked_at: null,
+      })
+      .eq("session_id", data.id)
+      .eq("user_id", user.id)
+      .select();
+
+    if (consentError) throw consentError;
+  }
+
   return data;
 }
 
@@ -82,6 +111,21 @@ export async function listSessionMembers(sessionId) {
     .from("ps_members")
     .select("*")
     .eq("session_id", sessionId);
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getCurrentMembership(sessionId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("AUTH_REQUIRED");
+
+  const { data, error } = await supabase
+    .from("ps_members")
+    .select("*")
+    .eq("session_id", sessionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
   if (error) throw error;
   return data;
@@ -107,19 +151,53 @@ export async function activateStage(stageRunId) {
   return data;
 }
 
+export async function createTransferStage({ sessionId, activitySpec }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("AUTH_REQUIRED");
+
+  const stages = await listStageRuns(sessionId);
+  const sequenceNumber = Math.max(0, ...stages.map((stage) => stage.sequence_number)) + 1;
+  const { data, error } = await supabase
+    .from("ps_stage_runs")
+    .insert({
+      session_id: sessionId,
+      stage_kind: "transfer",
+      sequence_number: sequenceNumber,
+      activity_spec: activitySpec,
+      created_by: user.id,
+      status: "draft",
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function endSensemakingSession(sessionId) {
+  const { data, error } = await supabase.rpc("ps_end_session", {
+    p_session_id: sessionId,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function submitStageResponse({
   sessionId,
   stageRunId,
-  userId,
   payload,
 }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("AUTH_REQUIRED");
+
   const { data, error } = await supabase
     .from("ps_responses")
     .upsert(
       {
         session_id: sessionId,
         stage_run_id: stageRunId,
-        user_id: userId,
+        user_id: user.id,
         payload,
         updated_at: new Date().toISOString(),
       },

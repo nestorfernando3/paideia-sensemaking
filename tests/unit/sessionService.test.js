@@ -7,6 +7,8 @@ import {
   listSessionMembers,
   listStageRuns,
   activateStage,
+  createTransferStage,
+  endSensemakingSession,
   submitStageResponse,
   subscribeToSession,
   subscribeToStageResponses,
@@ -16,6 +18,7 @@ import { supabase } from "../../src/utils/supabase.js";
 vi.mock("../../src/utils/supabase.js", () => {
   return {
     supabase: {
+      auth: { getUser: vi.fn() },
       rpc: vi.fn(),
       from: vi.fn(),
       channel: vi.fn(),
@@ -25,7 +28,7 @@ vi.mock("../../src/utils/supabase.js", () => {
 
 describe("sessionService & sensemakingRepository", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe("generateJoinCode", () => {
@@ -115,17 +118,64 @@ describe("sessionService & sensemakingRepository", () => {
   });
 
   describe("joinSensemakingSession", () => {
-    it("invoca rpc('ps_join_session')", async () => {
-      const mockSession = { id: "sess-1", join_code: "JOIN12" };
+    it("registra los consentimientos elegidos con la identidad autenticada", async () => {
+      const mockSession = {
+        id: "sess-1",
+        join_code: "JOIN12",
+        allow_free_ai_assistance: true,
+        ai_disclosure_version: "v1.0",
+        allow_collective_external_ai: true,
+        collective_ai_notice_version: "v1.0",
+      };
       supabase.rpc.mockResolvedValueOnce({ data: mockSession, error: null });
+      supabase.auth.getUser.mockResolvedValueOnce({ data: { user: { id: "auth-user-1" } } });
+      const updateMock = vi.fn().mockReturnThis();
+      const eqMock = vi.fn().mockReturnThis();
+      const selectMock = vi.fn().mockResolvedValueOnce({ data: [{}], error: null });
+      supabase.from.mockReturnValueOnce({ update: updateMock, eq: eqMock, select: selectMock });
 
-      const result = await joinSensemakingSession("JOIN12", "Estudiante Juan");
+      const result = await joinSensemakingSession("JOIN12", "Estudiante Juan", {
+        allowFreeAiAssistance: true,
+        allowCollectiveExternalAi: true,
+      });
 
       expect(supabase.rpc).toHaveBeenCalledWith("ps_join_session", {
         p_join_code: "JOIN12",
         p_display_name: "Estudiante Juan",
       });
+      expect(supabase.from).toHaveBeenCalledWith("ps_members");
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
+        free_ai_consent_at: expect.any(String),
+        collective_external_ai_consent_at: expect.any(String),
+        collective_external_ai_consent_version: "v1.0",
+      }));
       expect(result).toEqual(mockSession);
+    });
+
+    it("mantiene nulos los consentimientos rechazados", async () => {
+      const mockSession = {
+        id: "sess-1",
+        join_code: "JOIN12",
+        allow_free_ai_assistance: true,
+        allow_collective_external_ai: true,
+      };
+      supabase.rpc.mockResolvedValueOnce({ data: mockSession, error: null });
+      supabase.auth.getUser.mockResolvedValueOnce({ data: { user: { id: "auth-user-1" } } });
+      const updateMock = vi.fn().mockReturnThis();
+      supabase.from.mockReturnValueOnce({
+        update: updateMock,
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValueOnce({ data: [{}], error: null }),
+      });
+
+      await joinSensemakingSession("JOIN12", "Estudiante Juan");
+
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
+        free_ai_consent_at: null,
+        collective_external_ai_consent_at: null,
+        collective_external_ai_consent_version: null,
+        collective_external_ai_consent_revoked_at: null,
+      }));
     });
   });
 
@@ -198,7 +248,47 @@ describe("sessionService & sensemakingRepository", () => {
       expect(result).toEqual(mockStage);
     });
 
+    it("endSensemakingSession usa el RPC endurecido", async () => {
+      supabase.rpc.mockResolvedValueOnce({ data: { id: "sess-1", status: "ended" }, error: null });
+
+      await endSensemakingSession("sess-1");
+
+      expect(supabase.rpc).toHaveBeenCalledWith("ps_end_session", {
+        p_session_id: "sess-1",
+      });
+    });
+
+    it("createTransferStage usa la identidad autenticada y la siguiente secuencia", async () => {
+      supabase.auth.getUser.mockResolvedValueOnce({ data: { user: { id: "auth-user-1" } } });
+      supabase.from
+        .mockReturnValueOnce({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({
+            data: [{ id: "stage-1", sequence_number: 1 }],
+            error: null,
+          }),
+        })
+        .mockReturnValueOnce({
+          insert: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: "stage-2", sequence_number: 2 },
+            error: null,
+          }),
+        });
+
+      const stage = await createTransferStage({
+        sessionId: "sess-1",
+        activitySpec: { type: "transfer_justification" },
+      });
+
+      expect(stage).toEqual({ id: "stage-2", sequence_number: 2 });
+      expect(supabase.from).toHaveBeenNthCalledWith(2, "ps_stage_runs");
+    });
+
     it("submitStageResponse usa upsert en ps_responses", async () => {
+      supabase.auth.getUser.mockResolvedValueOnce({ data: { user: { id: "auth-user-1" } } });
       const upsertMock = vi.fn().mockReturnThis();
       const selectMock = vi.fn().mockReturnThis();
       const singleMock = vi.fn().mockResolvedValueOnce({
@@ -215,7 +305,6 @@ describe("sessionService & sensemakingRepository", () => {
       const response = await submitStageResponse({
         sessionId: "sess-1",
         stageRunId: "stage-1",
-        userId: "user-1",
         payload: { answer: "Mi respuesta" },
       });
 
@@ -224,7 +313,7 @@ describe("sessionService & sensemakingRepository", () => {
         expect.objectContaining({
           session_id: "sess-1",
           stage_run_id: "stage-1",
-          user_id: "user-1",
+          user_id: "auth-user-1",
           payload: { answer: "Mi respuesta" },
         }),
         { onConflict: "stage_run_id,user_id" }
