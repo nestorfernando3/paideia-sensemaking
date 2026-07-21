@@ -8,8 +8,32 @@ import {
   assertAiResult,
   parsePaideiaAiRequest,
   safePostgrestErrorCode,
+  statusForError,
 } from "../../_shared/contracts.ts";
 import { redactObjectPII } from "../../_shared/redaction.ts";
+
+function addUnknownProperty(
+  value: unknown,
+  path: readonly (string | number)[],
+): void {
+  let current = value;
+  for (const key of path) {
+    if (Array.isArray(current) && typeof key === "number") {
+      current = current[key];
+    } else if (
+      current !== null && typeof current === "object" &&
+      !Array.isArray(current) && typeof key === "string"
+    ) {
+      current = (current as Record<string, unknown>)[key];
+    } else throw new Error("INVALID_TEST_PATH");
+  }
+  if (
+    current === null || typeof current !== "object" || Array.isArray(current)
+  ) {
+    throw new Error("INVALID_TEST_PATH");
+  }
+  (current as Record<string, unknown>).extra = true;
+}
 
 Deno.test("verifyJwtUser accepts only a user validated by Supabase Auth", async () => {
   const fetcher = (() =>
@@ -179,6 +203,132 @@ Deno.test("model results enforce nested types, real aliases, canonical columns a
     Error,
     "INVALID_MODEL_RESULT",
   );
+});
+
+Deno.test("model results reject unknown properties at every object level", () => {
+  const analysis = {
+    summary: "Hay una confusión recurrente.",
+    participation: { submitted: 1, expected: 1 },
+    patterns: [{
+      key: "confusion",
+      label: "Confusión",
+      description: "Se mezclan intención y efecto.",
+      responseIds: ["learner_1"],
+      evidence: [{ responseId: "learner_1", excerpt: "Respuesta breve" }],
+    }],
+    limitations: ["Muestra pequeña"],
+    readiness: { status: "intervene", rationale: "Conviene intervenir." },
+    options: [{
+      key: "one",
+      title: "Separar dimensiones",
+      rationale: "Hace explícita la distinción.",
+      activity: {
+        type: "three_column",
+        title: "Tres columnas",
+        prompt: "Completa cada columna.",
+        columns: [
+          { key: "said", label: "Qué se dijo" },
+          { key: "intended", label: "Qué se intentó hacer" },
+          { key: "effect", label: "Qué efecto produjo" },
+        ],
+      },
+    }],
+  };
+  const analysisPaths = [
+    [],
+    ["participation"],
+    ["patterns", 0],
+    ["patterns", 0, "evidence", 0],
+    ["readiness"],
+    ["options", 0],
+    ["options", 0, "activity"],
+    ["options", 0, "activity", "columns", 0],
+  ];
+  for (const path of analysisPaths) {
+    const invalid = structuredClone(analysis);
+    addUnknownProperty(invalid, path);
+    assertThrows(
+      () =>
+        assertAiResult("analyze_stage", invalid, {
+          allowedAliasIds: ["learner_1"],
+        }),
+      Error,
+      "INVALID_MODEL_RESULT",
+    );
+  }
+
+  const comparison = {
+    summary: "Hay progreso.",
+    observedChanges: [{
+      label: "Distingue dimensiones",
+      description: "Ahora separa intención y efecto.",
+      initialEvidenceIds: ["learner_1"],
+      transferEvidenceIds: ["learner_1"],
+    }],
+    persistentDifficulties: [{
+      label: "Precisión",
+      description: "Falta justificar el efecto.",
+      responseIds: ["learner_1"],
+    }],
+    limitations: ["Muestra pequeña"],
+    recommendation: { status: "reinforce", rationale: "Practicar más." },
+  };
+  const comparisonPaths = [
+    [],
+    ["observedChanges", 0],
+    ["persistentDifficulties", 0],
+    ["recommendation"],
+  ];
+  for (const path of comparisonPaths) {
+    const invalid = structuredClone(comparison);
+    addUnknownProperty(invalid, path);
+    assertThrows(
+      () =>
+        assertAiResult("compare_learning", invalid, {
+          allowedAliasIds: ["learner_1"],
+        }),
+      Error,
+      "INVALID_MODEL_RESULT",
+    );
+  }
+
+  assertThrows(
+    () =>
+      assertAiResult("assist_user", {
+        intent: "hint",
+        message: "Observa la intención.",
+        nextAction: "Compara las tres dimensiones.",
+        model: "mimo-v2.5-free",
+        isFreeModel: true,
+        extra: true,
+      }, { expectedIntent: "hint" }),
+    Error,
+    "INVALID_MODEL_RESULT",
+  );
+});
+
+Deno.test("HTTP status mapping distinguishes authentication from authorization", () => {
+  for (
+    const code of [
+      "INVALID_JWT",
+      "MISSING_AUTH_HEADER",
+      "INVALID_AUTH_HEADER_FORMAT",
+      "AUTH_REQUIRED",
+    ]
+  ) assertEquals(statusForError(code), 401);
+
+  for (
+    const code of [
+      "COLLECTIVE_AI_NOT_AUTHORIZED",
+      "FREE_AI_CONSENT_REQUIRED",
+      "TEACHER_REQUIRED",
+      "MEMBER_REQUIRED",
+    ]
+  ) assertEquals(statusForError(code), 403);
+
+  assertEquals(statusForError("RATE_LIMIT_ASSIST_EXCEEDED"), 429);
+  assertEquals(statusForError("FREE_MODEL_UNAVAILABLE"), 503);
+  assertEquals(statusForError("INVALID_REQUEST"), 400);
 });
 
 Deno.test("PostgREST errors expose only approved application codes", () => {

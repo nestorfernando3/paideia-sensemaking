@@ -9,6 +9,7 @@ import {
   PaideiaAiRequest,
   parsePaideiaAiRequest,
   safePostgrestErrorCode,
+  statusForError,
 } from "../_shared/contracts.ts";
 import {
   createEphemeralPseudonymMap,
@@ -341,7 +342,7 @@ serve(async (req: Request) => {
     ]);
     const eligibleModels = selectFreeModels({ availability, costs });
     if (eligibleModels.length === 0) {
-      return json({ error: "FREE_MODEL_UNAVAILABLE" }, 422);
+      return json({ error: "FREE_MODEL_UNAVAILABLE" }, 503);
     }
 
     const prompts = await preparePrompts({
@@ -385,6 +386,12 @@ serve(async (req: Request) => {
     runId = reserved.id;
 
     if (reserved.status === "succeeded") {
+      assertAiResult(request.operation, reserved.result, {
+        allowedAliasIds: prompts.allowedAliasIds,
+        expectedIntent: request.operation === "assist_user"
+          ? request.intent
+          : undefined,
+      });
       return json({
         success: true,
         data: reserved.result,
@@ -534,15 +541,6 @@ serve(async (req: Request) => {
         );
       }
     }
-    const status = errorCode === "INVALID_JWT" || errorCode.includes("AUTH")
-      ? 401
-      : errorCode.includes("REQUIRED") || errorCode.includes("AUTHORIZED")
-      ? 403
-      : errorCode.startsWith("RATE_LIMIT_")
-      ? 429
-      : errorCode === "FREE_MODEL_UNAVAILABLE"
-      ? 503
-      : 400;
-    return json({ error: errorCode }, status);
+    return json({ error: errorCode }, statusForError(errorCode));
   }
 });

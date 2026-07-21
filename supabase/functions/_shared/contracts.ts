@@ -55,6 +55,12 @@ const SAFE_POSTGREST_MESSAGES = new Set([
   "RATE_LIMIT_ASSIST_EXCEEDED",
   "RATE_LIMIT_ANALYZE_EXCEEDED",
 ]);
+const AUTHENTICATION_ERROR_CODES = new Set([
+  "INVALID_JWT",
+  "MISSING_AUTH_HEADER",
+  "INVALID_AUTH_HEADER_FORMAT",
+  "AUTH_REQUIRED",
+]);
 
 function requiredString(value: unknown, name: string, maxLength = 200): string {
   if (
@@ -139,6 +145,16 @@ export function safePostgrestErrorCode(
   return `DATABASE_REQUEST_FAILED_${status}`;
 }
 
+export function statusForError(errorCode: string): number {
+  if (AUTHENTICATION_ERROR_CODES.has(errorCode)) return 401;
+  if (errorCode.startsWith("RATE_LIMIT_")) return 429;
+  if (errorCode === "FREE_MODEL_UNAVAILABLE") return 503;
+  if (
+    errorCode.endsWith("_REQUIRED") || errorCode.endsWith("_AUTHORIZED")
+  ) return 403;
+  return 400;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -154,8 +170,14 @@ function resultString(value: unknown): string {
   return value;
 }
 
-function resultRecord(value: unknown): Record<string, unknown> {
+function resultRecord(
+  value: unknown,
+  allowedKeys?: readonly string[],
+): Record<string, unknown> {
   if (!isRecord(value)) invalidResult();
+  if (
+    allowedKeys && Object.keys(value).some((key) => !allowedKeys.includes(key))
+  ) invalidResult();
   return value;
 }
 
@@ -172,7 +194,12 @@ function stringArray(value: unknown, aliases?: Set<string>): void {
 }
 
 function assertThreeColumnActivity(value: unknown): void {
-  const activity = resultRecord(value);
+  const activity = resultRecord(value, [
+    "type",
+    "title",
+    "prompt",
+    "columns",
+  ]);
   if (activity.type !== "three_column") invalidResult();
   resultString(activity.title);
   resultString(activity.prompt);
@@ -180,7 +207,7 @@ function assertThreeColumnActivity(value: unknown): void {
   const keys = ["said", "intended", "effect"];
   if (columns.length !== keys.length) invalidResult();
   columns.forEach((column, index) => {
-    const parsed = resultRecord(column);
+    const parsed = resultRecord(column, ["key", "label"]);
     if (parsed.key !== keys[index]) invalidResult();
     resultString(parsed.label);
   });
@@ -190,8 +217,19 @@ function assertStageAnalysis(
   value: Record<string, unknown>,
   aliases: Set<string>,
 ): void {
+  resultRecord(value, [
+    "summary",
+    "participation",
+    "patterns",
+    "limitations",
+    "readiness",
+    "options",
+  ]);
   resultString(value.summary);
-  const participation = resultRecord(value.participation);
+  const participation = resultRecord(value.participation, [
+    "submitted",
+    "expected",
+  ]);
   if (
     !Number.isInteger(participation.submitted) ||
     Number(participation.submitted) < 0 ||
@@ -201,20 +239,26 @@ function assertStageAnalysis(
   ) invalidResult();
 
   for (const patternValue of resultArray(value.patterns)) {
-    const pattern = resultRecord(patternValue);
+    const pattern = resultRecord(patternValue, [
+      "key",
+      "label",
+      "description",
+      "responseIds",
+      "evidence",
+    ]);
     resultString(pattern.key);
     resultString(pattern.label);
     resultString(pattern.description);
     stringArray(pattern.responseIds, aliases);
     for (const evidenceValue of resultArray(pattern.evidence)) {
-      const evidence = resultRecord(evidenceValue);
+      const evidence = resultRecord(evidenceValue, ["responseId", "excerpt"]);
       const responseId = resultString(evidence.responseId);
       if (!aliases.has(responseId)) invalidResult();
       resultString(evidence.excerpt);
     }
   }
   stringArray(value.limitations);
-  const readiness = resultRecord(value.readiness);
+  const readiness = resultRecord(value.readiness, ["status", "rationale"]);
   if (
     !["advance", "intervene", "insufficient_evidence"].includes(
       String(readiness.status),
@@ -224,7 +268,12 @@ function assertStageAnalysis(
   const options = resultArray(value.options);
   if (options.length < 2 || options.length > 4) invalidResult();
   for (const optionValue of options) {
-    const option = resultRecord(optionValue);
+    const option = resultRecord(optionValue, [
+      "key",
+      "title",
+      "rationale",
+      "activity",
+    ]);
     resultString(option.key);
     resultString(option.title);
     resultString(option.rationale);
@@ -236,22 +285,41 @@ function assertLearningComparison(
   value: Record<string, unknown>,
   aliases: Set<string>,
 ): void {
+  resultRecord(value, [
+    "summary",
+    "observedChanges",
+    "persistentDifficulties",
+    "limitations",
+    "recommendation",
+  ]);
   resultString(value.summary);
   for (const changeValue of resultArray(value.observedChanges)) {
-    const change = resultRecord(changeValue);
+    const change = resultRecord(changeValue, [
+      "label",
+      "description",
+      "initialEvidenceIds",
+      "transferEvidenceIds",
+    ]);
     resultString(change.label);
     resultString(change.description);
     stringArray(change.initialEvidenceIds, aliases);
     stringArray(change.transferEvidenceIds, aliases);
   }
   for (const difficultyValue of resultArray(value.persistentDifficulties)) {
-    const difficulty = resultRecord(difficultyValue);
+    const difficulty = resultRecord(difficultyValue, [
+      "label",
+      "description",
+      "responseIds",
+    ]);
     resultString(difficulty.label);
     resultString(difficulty.description);
     stringArray(difficulty.responseIds, aliases);
   }
   stringArray(value.limitations);
-  const recommendation = resultRecord(value.recommendation);
+  const recommendation = resultRecord(value.recommendation, [
+    "status",
+    "rationale",
+  ]);
   if (
     !["advance", "reinforce", "insufficient_evidence"].includes(
       String(recommendation.status),
@@ -280,6 +348,14 @@ export function assertAiResult(
   if (operation === "compare_learning") {
     return assertLearningComparison(result, aliases);
   }
+  resultRecord(result, [
+    "intent",
+    "message",
+    "nextAction",
+    "boundaryNotice",
+    "model",
+    "isFreeModel",
+  ]);
   if (!context.expectedIntent || result.intent !== context.expectedIntent) {
     invalidResult();
   }
