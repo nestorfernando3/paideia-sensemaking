@@ -13,6 +13,7 @@ import {
 } from '../services/sessionService.js';
 import { escapeHtml } from '../utils/escapeHtml.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
+import { deriveUserRole, getCurrentRole } from '../utils/session.js';
 
 export function renderComparison(sessionId, initialStageRunId, transferStageRunId) {
   return `
@@ -30,6 +31,13 @@ export async function initComparison(sessionId, initialStageRunId, transferStage
   const loadingEl = document.getElementById('comparison-loading');
   const contentEl = document.getElementById('comparison-content');
   if (!contentEl) return;
+
+  const previousRole = getCurrentRole();
+  const verifiedRole = await deriveUserRole(sessionId);
+  if (verifiedRole !== previousRole) {
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    return;
+  }
 
   let session = null;
   let members = [];

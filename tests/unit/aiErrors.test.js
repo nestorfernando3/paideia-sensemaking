@@ -19,6 +19,7 @@ describe("AI error handling and resilience", () => {
     expect(AI_ERROR_MESSAGES.ZEN_UNAVAILABLE).toBe(
       "El servicio de IA no está disponible. Continúa la clase y vuelve a intentarlo después."
     );
+    expect(AI_ERROR_MESSAGES.AI_RUN_IN_PROGRESS).toContain("análisis en curso");
   });
 
   it("getOnlineSessionErrorMessage retorna mensaje amigable ante FREE_MODEL_UNAVAILABLE", () => {

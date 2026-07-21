@@ -8,6 +8,7 @@ import { renderAnalysisPanel } from '../components/analysisPanel.js';
 import { runStageAnalysis, createInterventionFromOption } from '../services/aiService.js';
 import { getSensemakingSession, activateStage } from '../services/sessionService.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
+import { deriveUserRole, getCurrentRole } from '../utils/session.js';
 
 export function renderAnalysis(sessionId, stageRunId) {
   return `
@@ -25,6 +26,13 @@ export async function initAnalysis(sessionId, stageRunId) {
   const loadingEl = document.getElementById('analysis-loading');
   const contentEl = document.getElementById('analysis-content');
   if (!contentEl) return;
+
+  const previousRole = getCurrentRole();
+  const verifiedRole = await deriveUserRole(sessionId);
+  if (verifiedRole !== previousRole) {
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    return;
+  }
 
   let session = null;
   let analysisResult = null;

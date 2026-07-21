@@ -1,6 +1,15 @@
 import { supabase } from "../utils/supabase.js";
 import { parseStageAnalysis, parseLearningComparison, parseUserAssistance } from "../domain/aiSchemas.js";
 
+async function throwFunctionError(error) {
+  let payload = null;
+  try {
+    payload = await error?.context?.clone?.().json();
+  } catch { /* preserve the original invoke error */ }
+  if (payload?.error) throw new Error(payload.error);
+  throw error;
+}
+
 export function createIdempotencyKey(operation, ...ids) {
   return [operation, ...ids].join(":");
 }
@@ -15,7 +24,7 @@ export async function runStageAnalysis({ sessionId, stageRunId, idempotencyKey }
     },
   });
 
-  if (error) throw error;
+  if (error) await throwFunctionError(error);
   if (data?.error) throw new Error(data.error);
 
   const validated = parseStageAnalysis(data.data);
@@ -37,7 +46,7 @@ export async function runLearningComparison({ sessionId, initialStageRunId, tran
     },
   });
 
-  if (error) throw error;
+  if (error) await throwFunctionError(error);
   if (data?.error) throw new Error(data.error);
 
   const validated = parseLearningComparison(data.data);
@@ -60,7 +69,7 @@ export async function requestUserAssistance({ sessionId, stageRunId, intent, res
     },
   });
 
-  if (error) throw error;
+  if (error) await throwFunctionError(error);
   if (data?.error) throw new Error(data.error);
 
   const validated = parseUserAssistance(data.data);

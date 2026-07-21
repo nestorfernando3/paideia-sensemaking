@@ -5,6 +5,9 @@ export const AI_ERROR_MESSAGES = {
   RATE_LIMITED: "Se alcanzó el límite de ayudas para esta etapa.",
   INVALID_MODEL_OUTPUT: "La IA no produjo un resultado verificable. No se aplicó ninguna recomendación.",
   ZEN_UNAVAILABLE: "El servicio de IA no está disponible. Continúa la clase y vuelve a intentarlo después.",
+  AI_RUN_IN_PROGRESS: "Ya hay un análisis en curso. Espera un momento y vuelve a abrir esta vista.",
+  FREE_AI_CONSENT_REQUIRED: "La ayuda individual requiere consentimiento explícito del participante.",
+  COLLECTIVE_AI_NOT_AUTHORIZED: "El análisis colectivo no está autorizado para esta sesión.",
 };
 
 export function getOnlineSessionErrorMessage(error, action) {
@@ -20,6 +23,22 @@ export function getOnlineSessionErrorMessage(error, action) {
 
   if (details.includes("RATE_LIMIT")) {
     return AI_ERROR_MESSAGES.RATE_LIMITED;
+  }
+
+  if (details.includes("AI_RUN_IN_PROGRESS")) {
+    return AI_ERROR_MESSAGES.AI_RUN_IN_PROGRESS;
+  }
+
+  if (details.includes("FREE_AI_CONSENT_REQUIRED")) {
+    return AI_ERROR_MESSAGES.FREE_AI_CONSENT_REQUIRED;
+  }
+
+  if (details.includes("COLLECTIVE_AI_NOT_AUTHORIZED")) {
+    return AI_ERROR_MESSAGES.COLLECTIVE_AI_NOT_AUTHORIZED;
+  }
+
+  if (details.includes("TEACHER_REQUIRED")) {
+    return AI_ERROR_MESSAGES.TEACHER_REQUIRED;
   }
 
   if (details.includes("SUPABASE ENVIRONMENT VARIABLES ARE MISSING")) {

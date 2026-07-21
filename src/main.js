@@ -128,12 +128,8 @@ function navigate() {
 
 // ── Initialize ────────────────────────────────────────────────────────────
 window.addEventListener('hashchange', navigate);
-window.addEventListener('DOMContentLoaded', () => {
-    if (!window.location.hash) {
-        window.location.hash = '/';
-    }
+if (window.location.hash) {
     navigate();
-});
-
-// Initial navigation
-navigate();
+} else {
+    window.location.hash = '/';
+}
