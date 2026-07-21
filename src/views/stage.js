@@ -20,8 +20,11 @@ import {
   getCurrentMembership,
 } from '../services/sessionService.js';
 import { requestUserAssistance } from '../services/aiService.js';
-import { getCurrentRole, isTeacher } from '../utils/session.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
+
+export function deriveStageRole(membership) {
+  return ['teacher', 'student'].includes(membership?.role) ? membership.role : null;
+}
 
 export function renderStage(sessionId, stageRunId) {
   return `
@@ -69,8 +72,8 @@ export async function initStage(sessionId, stageRunId) {
     return;
   }
 
-  const role = getCurrentRole() || 'student';
-  const teacher = isTeacher();
+  const role = deriveStageRole(membership) || 'student';
+  const teacher = role === 'teacher';
   const isActive = stageRun.status === 'active';
   const aiEnabled = Boolean(
     session.allow_free_ai_assistance && membership?.free_ai_consent_at

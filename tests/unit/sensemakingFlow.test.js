@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderSensemakingFlow } from "../../src/views/session.js";
+import { deriveStageRole } from "../../src/views/stage.js";
 
 const stages = [
   {
@@ -19,6 +20,12 @@ const stages = [
 ];
 
 describe("navegación Sensemaking", () => {
+  it("conserva el rol seguro de la membresía tras una recarga", () => {
+    expect(deriveStageRole({ role: "teacher" })).toBe("teacher");
+    expect(deriveStageRole({ role: "student" })).toBe("student");
+    expect(deriveStageRole({ role: "admin" })).toBeNull();
+  });
+
   it("permite al docente abrir todas las etapas", () => {
     const html = renderSensemakingFlow(stages, "teacher", "session-1");
     expect(html).toContain("#/session/session-1/stage/initial-1");
