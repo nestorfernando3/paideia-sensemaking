@@ -8,6 +8,7 @@ import { renderNewSession, initNewSession } from './views/newSession.js';
 import { renderStudentJoin, initStudentJoin } from './views/student.js';
 import { renderSession, initSession } from './views/session.js';
 import { renderStage, initStage } from './views/stage.js';
+import { renderAnalysis, initAnalysis } from './views/analysis.js';
 import { renderGnosis, initGnosis } from './views/gnosis.js';
 import { renderEikasia, initEikasia } from './views/eikasia.js';
 import { renderAporia, initAporia } from './views/aporia.js';
@@ -55,6 +56,16 @@ function navigate() {
     if (routes[path]) {
         app.innerHTML = routes[path].render();
         if (routes[path].init) routes[path].init();
+        window.scrollTo(0, 0);
+        return;
+    }
+
+    // Analysis route: /session/:sessionId/analysis/:stageRunId
+    const analysisMatch = path.match(/^\/session\/([0-9a-f-]+)\/analysis\/([0-9a-f-]+)$/i);
+    if (analysisMatch) {
+        const [, sessionId, stageRunId] = analysisMatch;
+        app.innerHTML = renderAnalysis(sessionId, stageRunId);
+        initAnalysis(sessionId, stageRunId);
         window.scrollTo(0, 0);
         return;
     }
