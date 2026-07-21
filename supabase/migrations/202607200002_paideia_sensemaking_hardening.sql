@@ -1,5 +1,35 @@
 create extension if not exists pg_cron;
 
+create table public.ps_migration_audit (
+  id bigint generated always as identity primary key,
+  migration_version text not null,
+  reason text not null check (reason in (
+    'stages_deleted_during_hardening',
+    'responses_deleted_during_hardening',
+    'ai_runs_deleted_during_hardening',
+    'teacher_decisions_deleted_during_hardening',
+    'ai_results_cleared_by_upgrade_purge',
+    'responses_deleted_by_upgrade_purge'
+  )),
+  affected_rows bigint not null check (affected_rows >= 0),
+  created_at timestamptz not null default now()
+);
+
+alter table public.ps_migration_audit enable row level security;
+revoke all on public.ps_migration_audit from public, anon, authenticated;
+grant select on public.ps_migration_audit to service_role;
+
+-- Counts only: no identifiers, names, payloads or response content are retained.
+create temporary table ps_upgrade_pre_counts on commit drop as
+select 'ps_stage_runs'::text as object_name, count(*)::bigint as row_count
+from public.ps_stage_runs
+union all
+select 'ps_responses', count(*) from public.ps_responses
+union all
+select 'ps_ai_runs', count(*) from public.ps_ai_runs
+union all
+select 'ps_teacher_decisions', count(*) from public.ps_teacher_decisions;
+
 -- Normalize rows accepted by 001 before validating stricter invariants.
 -- A recorded end timestamp wins over an active flag; a missing timestamp on an
 -- ended session falls back to created_at so retention is never postponed.
@@ -161,6 +191,25 @@ set status = 'closed',
 from ranked_active_stages ranked
 where ranked.id = stage.id
   and ranked.active_rank > 1;
+
+insert into public.ps_migration_audit (
+  migration_version, reason, affected_rows
+)
+select '202607200002', 'stages_deleted_during_hardening',
+       row_count - (select count(*) from public.ps_stage_runs)
+from ps_upgrade_pre_counts where object_name = 'ps_stage_runs'
+union all
+select '202607200002', 'responses_deleted_during_hardening',
+       row_count - (select count(*) from public.ps_responses)
+from ps_upgrade_pre_counts where object_name = 'ps_responses'
+union all
+select '202607200002', 'ai_runs_deleted_during_hardening',
+       row_count - (select count(*) from public.ps_ai_runs)
+from ps_upgrade_pre_counts where object_name = 'ps_ai_runs'
+union all
+select '202607200002', 'teacher_decisions_deleted_during_hardening',
+       row_count - (select count(*) from public.ps_teacher_decisions)
+from ps_upgrade_pre_counts where object_name = 'ps_teacher_decisions';
 
 alter table public.ps_sessions
   add constraint ps_sessions_status_ended_at_check check (
@@ -498,7 +547,28 @@ to service_role;
 do $$
 declare
   existing_job bigint;
+  cleared_ai_results bigint;
+  deleted_responses bigint;
 begin
+  -- Close the scheduler gap during upgrade. The function is idempotent and
+  -- preserves every session with a documented retention obligation.
+  select purge.cleared_ai_results, purge.deleted_responses
+  into cleared_ai_results, deleted_responses
+  from public.ps_purge_expired_session_data() purge;
+
+  insert into public.ps_migration_audit (
+    migration_version, reason, affected_rows
+  )
+  values
+    (
+      '202607200002', 'ai_results_cleared_by_upgrade_purge',
+      cleared_ai_results
+    ),
+    (
+      '202607200002', 'responses_deleted_by_upgrade_purge',
+      deleted_responses
+    );
+
   select jobid into existing_job
   from cron.job
   where jobname = 'ps_purge_expired_session_data';

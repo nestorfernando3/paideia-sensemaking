@@ -1,5 +1,38 @@
 begin;
-select plan(54);
+select plan(58);
+
+select has_table(
+  'public', 'ps_migration_audit',
+  'El saneamiento incremental deja auditoría durable sin payloads'
+);
+
+select is(
+  (
+    select count(*)
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'ps_migration_audit'
+      and column_name in (
+        'payload', 'user_id', 'display_name', 'session_id', 'response_id'
+      )
+  ),
+  0::bigint,
+  'La auditoría no tiene columnas para payloads, PII o identificadores'
+);
+
+select is(
+  (select count(*) from public.ps_migration_audit
+    where reason like '%_during_hardening'),
+  4::bigint,
+  'El saneamiento registra conteos por objeto incluso cuando son cero'
+);
+
+select is(
+  (select count(*) from public.ps_migration_audit
+    where reason like '%_by_upgrade_purge'),
+  2::bigint,
+  'La purga inmediata del upgrade queda auditada'
+);
 
 select ok(
   position(
