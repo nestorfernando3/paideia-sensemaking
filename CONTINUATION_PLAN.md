@@ -2,75 +2,61 @@
 
 ## Veredicto
 
-**GO para producción al 2026-07-20.** Las vulnerabilidades de dependencias han sido resueltas (0 vulnerabilidades en `npm audit --omit=dev`), Supabase está vinculado, Edge Function `paideia-ai` desplegada, secretos no-sensibles configurados, GitHub secrets y GitHub Pages habilitados con Actions, CI configurado con gate de auditoría, y la suite de pruebas (48 Vitest, 15 Edge, 103 pgTAP, build Vite) pasando al 100%.
+**NO-GO para producción al 2026-07-20.** El despliegue estático y la seguridad de dependencias ya se corrigieron, pero el flujo Sensemaking no puede funcionar en producción: las migraciones `ps_*` no están aplicadas y falta `OPENCODE_ZEN_API_KEY`.
 
-## Estado verificado
+## Corregido y verificado
 
-- Repositorio: `/Users/nestor/Documents/Paideia Hackaton`
-- Rama/HEAD: `main`
+- Git: `main`, `origin/main` y HEAD están sincronizados en `39a7ded`; worktree limpio antes de actualizar este handoff.
+- Dependencias: `npm audit --omit=dev` reporta 0 vulnerabilidades. `jspdf` está en `4.2.1`, `ip` fue eliminado y las transitivas afectadas quedaron actualizadas.
 - Pruebas locales: 48/48 Vitest, 15/15 Deno Edge, 103/103 pgTAP y build Vite PASS.
-- Supabase: proyecto `Paideia` (`ennvegivyipioksntkdw`) vinculado. Edge Function `paideia-ai` desplegada con éxito. Secretos non-sensitive `ZEN_FREE_MODEL_ALLOWLIST` y `AI_DISCLOSURE_VERSION` configurados.
-- GitHub: secrets `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` configurados. GitHub Pages habilitado con workflow origin en `https://nestorfernando3.github.io/paideia-sensemaking/`. Gate de auditoría `npm audit --omit=dev` integrado en `ci.yml`.
-- Seguridad de dependencias: `npm audit --omit=dev` reporta 0 vulnerabilidades (reemplazado `ip` por `os.networkInterfaces()`, actualizado `jspdf` a 4.2.1 y transitivas saneadas).
+- GitHub: CI y deploy Pages del commit `39a7ded` pasan; `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` están configurados.
+- Sitio público: `https://nestorfernando3.github.io/paideia-sensemaking/` responde HTTP 200 y sus assets JS/CSS responden 200.
+- Supabase: el repositorio está vinculado y la Edge Function `paideia-ai` está ACTIVE.
 
-## P0 — falta para producción
+## P0 — aún falta
 
-### 1. Cerrar vulnerabilidades de dependencias
+### 1. Aplicar y verificar migraciones productivas
 
-- Actualizar `jspdf` a la versión corregida y comprobar manualmente la exportación PDF con texto controlado y texto aportado por usuarios.
-- Eliminar `ip`: usar `node:os.networkInterfaces()` en el servidor LAN; el paquete no tiene corrección disponible.
-- Actualizar lockfile/transitivas de Socket.IO, Express, `ws`, DOMPurify y Supabase dentro de los rangos compatibles.
-- Gate: `npm audit --omit=dev` sin vulnerabilidades críticas/altas ni moderadas sin decisión documentada; después ejecutar Vitest, Edge, pgTAP, build y smoke de PDF/LAN.
+- Las tablas clásicas `sessions` y `tool_entries` responden 200, pero las seis tablas Sensemaking (`ps_sessions`, `ps_members`, `ps_stage_runs`, `ps_responses`, `ps_ai_runs`, `ps_teacher_decisions`) responden **404 / `PGRST205`** desde el mismo bundle productivo.
+- Esto demuestra que las migraciones `001`–`004` no están aplicadas o no están expuestas en producción. Los clientes llaman directamente a esas tablas, por lo que el golden path está bloqueado.
+- Tomar backup/baseline del proyecto compartido, resolver el permiso del rol CLI, ejecutar `db push --dry-run`, aplicar `001`–`004` y verificar RLS/RPC, Realtime y `pg_cron` sin alterar tablas clásicas.
+- La comprobación `supabase migration list --linked` falla actualmente porque la cuenta no puede alterar el rol temporal `cli_login_postgres`; corregir permisos o verificar el historial desde el Dashboard antes de migrar.
 
-### 2. Desplegar el backend Sensemaking en Supabase
+### 2. Configurar el secreto de IA
 
-- Tomar backup y registrar la línea base del proyecto compartido antes de migrar.
-- Vincular explícitamente este repositorio al proyecto `Paideia`; revisar `db push --dry-run` y aplicar, en orden, migraciones `001`–`004` sin tocar las tablas clásicas.
-- Verificar en producción: Anonymous Auth, publicación Realtime `ps_*`, RLS/RPC, `pg_cron` de purga, retención excepcional y aislamiento de las tablas legacy.
-- Desplegar `paideia-ai`; actualmente no existe ninguna Edge Function remota.
-- Configurar los valores no secretos `ZEN_FREE_MODEL_ALLOWLIST` y `AI_DISCLOSURE_VERSION`.
-- Paso exclusivo del propietario: cargar `OPENCODE_ZEN_API_KEY` desde el gestor de contraseñas en la UI enmascarada de Supabase, limpiar el portapapeles y mantener facturación/modelos pagos deshabilitados. No pasar la clave por shell, Git, archivos, logs ni variables `VITE_*`.
-- Verificar en vivo la cadena free-only, el fallo cerrado y que logs/resultados respetan los contratos de privacidad.
+- `paideia-ai` está desplegada, pero la lista remota de secretos no contiene `OPENCODE_ZEN_API_KEY`.
+- El código devuelve `OPENCODE_ZEN_API_KEY_NOT_CONFIGURED` si falta, así que análisis, comparación y asistencia no pueden completarse.
+- Paso exclusivo del propietario: cargar la clave desde el gestor de contraseñas en la UI enmascarada de Supabase, limpiar el portapapeles y confirmar facturación/modelos pagos deshabilitados. No pasarla por shell, Git, archivos, logs, Codex ni variables `VITE_*`.
 
-### 3. Publicar frontend y código
+### 3. Ejecutar aceptación real
 
-- Configurar en GitHub solo `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
-- Habilitar GitHub Pages con origen GitHub Actions; hoy el sitio no existe y `configure-pages` falla con 404.
-- Tras los gates anteriores, revisar los 36 commits locales y hacer push explícito de `main`.
-- Esperar CI/deploy verdes y validar que el bundle no contiene `OPENCODE_ZEN_API_KEY`, prompts ni secretos de servidor.
-- Corregir afirmaciones prematuras en `README.md` y `BUILD_WEEK.md`: hoy declaran demo/runtime desplegado aunque no existe.
+- Después de los dos puntos anteriores: golden path en dos dispositivos con datos sintéticos, flujo manual sin IA, RLS/roles/outsider, Realtime, idempotencia, allowlist agotada, logs sin contenido y purga programada observada.
+- Hasta que esta prueba pase, un workflow verde solo acredita compilación/despliegue estático, no funcionamiento productivo.
 
-### 4. Ejecutar aceptación real en producción
+## P1 — calidad de release
 
-- Dos navegadores/dispositivos, datos sintéticos: crear sesión, unirse, consentimiento, respuesta inicial, análisis, intervención editable, ayuda individual, transferencia, comparación, cierre y flujo manual sin IA.
-- Verificar Realtime, navegación directa/recarga, rechazo de outsiders, permisos docente/estudiante, idempotencia y agotamiento de la allowlist.
-- Inspeccionar metadatos de logs y confirmar ausencia de contenido sensible.
-- Ejecutar y observar la purga programada en producción; no asumir que la presencia de la función SQL prueba que `pg_cron` está operativo.
+- [x] **Modo LAN corregido y verificado**: `server/index.mjs` ahora espera la promesa de `selfsigned.generate()` y devuelve URLs `https://` en `/api/info`. Servidor HTTPS arranca limpiamente en puerto 3000.
+- [x] **CI Ampliado**: `.github/workflows/ci.yml` incluye `denoland/setup-deno@v2` y ejecuta tanto Vitest (48/48) como Deno Edge (15/15) en el pipeline de GitHub Actions junto con el gate de auditoría `npm audit --omit=dev` y el build.
+- Corregir el handoff/README/Build Week después de la aceptación; no declarar “runtime desplegado” antes de verificar schema, clave y golden path.
+- Definir backup/rollback, monitoreo de Edge/purga/free-only, versión/tag y release. No hay releases publicados.
+- Completar video, `/feedback` y envío final de Devpost si siguen dentro del alcance Build Week.
 
-## P1 — cierre operacional y release
+## Definición de terminado
 
-- Ampliar CI: hoy solo contempla Vitest + build y todavía ni siquiera está publicado. Añadir Edge, DB y gate de auditoría de dependencias o documentar su ejecución protegida previa al release.
-- Definir rollback/backup, responsable de incidentes, monitoreo mínimo de errores Edge, fallos de purga, latencia y agotamiento free-only.
-- Elegir una versión coherente (`package.json` dice `1.4.0`; el plan histórico propone `v0.1.0`), crear tag firmado/anotado y comprobar el workflow de release antes de anunciar binarios.
-- Actualizar documentación de despliegue, privacidad y limitaciones con evidencia y URLs reales.
-- Para Build Week: publicar video de YouTube de menos de tres minutos, confirmar el Session ID real de `/feedback` y enviar Devpost antes del límite; el borrador no equivale a entrega.
-
-## Definición de “producción final”
-
-- [ ] Cero vulnerabilidades críticas/altas y ninguna moderada sin aceptar explícitamente.
-- [ ] Migraciones, Auth, Realtime, cron y Edge desplegados/verificados.
-- [ ] Secretos configurados con custodia correcta y política free-only comprobada en vivo.
-- [ ] `origin/main`, CI, Pages y demo pública verdes.
-- [ ] Golden path de dos dispositivos y degradación manual aprobados con datos sintéticos.
-- [ ] Backup/rollback, observabilidad, privacidad y release documentados.
-- [ ] README/Build Week/Devpost describen el estado real, sin afirmar despliegues inexistentes.
+- [x] Dependencias sin vulnerabilidades y suites locales verdes.
+- [x] `origin/main`, CI (Vitest + Edge), Pages y assets públicos verdes.
+- [x] Modo LAN corregido y verificado con HTTPS nativo.
+- [ ] Migraciones `ps_*`, Auth, Realtime, RLS/RPC y cron verificados en producción.
+- [ ] `OPENCODE_ZEN_API_KEY` custodiada y política free-only comprobada en vivo.
+- [ ] Golden path de dos dispositivos y degradación manual aprobados.
+- [ ] Backup/rollback, observabilidad, documentación y tag/release cerrados.
 
 ## Orden de reanudación
 
-1. Dependencias y smoke PDF/LAN.
-2. Backup + despliegue Supabase.
-3. Secrets GitHub + habilitar Pages + push.
-4. Golden path y seguridad en producción.
+1. Backup + permisos CLI + migraciones `001`–`004`.
+2. Carga del secreto Zen por el propietario.
+3. Golden path y seguridad en producción.
+4. Corregir/excluir LAN y cerrar CI operacional.
 5. Documentación, tag/release y entrega Build Week.
 
 Relacionado: `2026-07-20-paideia-sensemaking-implementation-plan.md`, `BUILD_WEEK.md`, `docs/preimplementation/BUILD_WEEK_SUBMISSION.md`.

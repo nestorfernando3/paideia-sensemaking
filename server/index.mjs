@@ -26,7 +26,7 @@ function getLocalIpAddress() {
 
 // Generate self-signed TLS certificate (valid for 365 days)
 const attrs = [{ name: 'commonName', value: 'paideia.local' }];
-const pems = selfsigned.generate(attrs, { days: 365, keySize: 2048 });
+const pems = await selfsigned.generate(attrs, { days: 365, keySize: 2048 });
 
 const app = express();
 const httpsServer = https.createServer(
@@ -54,7 +54,7 @@ app.get('/api/info', (req, res) => {
         mode: 'LOCAL',
         ip: localIp,
         port: PORT,
-        networkUrl: `http://${localIp}:${PORT}`
+        networkUrl: `https://${localIp}:${PORT}`
     });
 });
 
