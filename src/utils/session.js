@@ -1,11 +1,12 @@
 // ==========================================================================
 // PAIDEIA — Session Manager
-// Gestión de sesiones de clase
+// Gestión de sesiones de clase y membresías de Paideia Sensemaking
 // ==========================================================================
 
 import { createSession, getSession, updateSession, getSessionAsync } from './storage.js';
+import { supabase } from './supabase.js';
 
-// Generate a 4-letter Greek-themed code
+// Generate a 4-letter Greek-themed code (classic fallback)
 const GREEK_LETTERS = 'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ';
 const LATIN_MAP = 'ABGDEZHTIKLMNXOPRSTYFCQW';
 
@@ -64,7 +65,9 @@ const STUDENT_ID_KEY = 'paideia_student_id';
 
 export function setCurrentSession(session, role) {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    sessionStorage.setItem(ROLE_KEY, role);
+    if (role) {
+        sessionStorage.setItem(ROLE_KEY, role);
+    }
 }
 
 export function getCurrentSession() {
@@ -72,8 +75,7 @@ export function getCurrentSession() {
         const data = sessionStorage.getItem(SESSION_KEY);
         if (!data) return null;
         const session = JSON.parse(data);
-        // Refresh from localStorage for latest data
-        const fresh = getSession(session.code);
+        const fresh = getSession(session.code || session.join_code);
         if (fresh) {
             sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
             return fresh;
@@ -86,6 +88,32 @@ export function getCurrentSession() {
 
 export function getCurrentRole() {
     return sessionStorage.getItem(ROLE_KEY) || null;
+}
+
+/**
+ * Derives user's actual role in a session directly from database ps_members table.
+ * @param {string} sessionId
+ * @returns {Promise<'teacher' | 'student' | null>}
+ */
+export async function deriveUserRole(sessionId) {
+    if (!supabase || !sessionId) return getCurrentRole();
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return getCurrentRole();
+
+        const { data, error } = await supabase
+            .from('ps_members')
+            .select('role')
+            .eq('session_id', sessionId)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (error || !data) return getCurrentRole();
+        sessionStorage.setItem(ROLE_KEY, data.role);
+        return data.role;
+    } catch {
+        return getCurrentRole();
+    }
 }
 
 export function isTeacher() {

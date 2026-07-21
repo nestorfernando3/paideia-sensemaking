@@ -1,9 +1,10 @@
 // ==========================================================================
-// PAIDEIA — Student Join View
-// El estudiante se une a una sesión con un código
+// PAIDEIA Sensemaking — Student Join View
+// El estudiante se une a una sesión mediante RPC o código local
 // ==========================================================================
 
 import { renderHeader } from '../components/header.js';
+import { joinSensemakingSession } from '../services/sessionService.js';
 import { joinSessionAsync, setCurrentSession, setStudentName, getStudentId } from '../utils/session.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
 
@@ -15,7 +16,7 @@ export function renderStudentJoin() {
         <div class="tool-view__header animate-fade-in">
           <div class="tool-view__greek-letter" style="font-size: var(--text-5xl);">Π</div>
           <h2 class="tool-view__name">Únete a una sesión</h2>
-          <p class="tool-view__concept">Ingresa el código de tu clase</p>
+          <p class="tool-view__concept">Ingresa el código de 6 caracteres de tu clase</p>
         </div>
 
         <form id="join-form" class="animate-card-enter stagger-2">
@@ -25,8 +26,8 @@ export function renderStudentJoin() {
               type="text"
               id="code"
               class="input"
-              placeholder="Ej: ABCD"
-              maxlength="4"
+              placeholder="Ej: ABCDEF"
+              maxlength="6"
               style="text-align: center; font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;"
               required
               autocomplete="off"
@@ -36,7 +37,7 @@ export function renderStudentJoin() {
 
           <div id="join-error" class="join-error" style="display: none;">
             <span class="join-error__icon">⚠</span>
-            Sesión no encontrada. Verifica el código e intenta de nuevo.
+            <span id="join-error-text">Sesión no encontrada. Verifica el código e intenta de nuevo.</span>
           </div>
 
           <div id="join-loading" style="display: none; text-align: center; padding: var(--space-lg);">
@@ -45,17 +46,17 @@ export function renderStudentJoin() {
               <span class="loading-dot" style="width:8px;height:8px;border-radius:50%;background:var(--gold);animation:bounceSoft 1s ease-in-out 0.15s infinite;"></span>
               <span class="loading-dot" style="width:8px;height:8px;border-radius:50%;background:var(--gold);animation:bounceSoft 1s ease-in-out 0.3s infinite;"></span>
             </div>
-            <p style="font-size: var(--text-sm); color: var(--obsidian-soft); margin-top: var(--space-sm);">Buscando sesión...</p>
+            <p style="font-size: var(--text-sm); color: var(--obsidian-soft); margin-top: var(--space-sm);">Uniéndote a la sesión...</p>
           </div>
 
           <div id="join-success" style="display: none; text-align: center; padding: var(--space-lg);">
             <div style="font-size: var(--text-3xl); color: var(--olive);">✓</div>
-            <p style="font-size: var(--text-sm); color: var(--olive); margin-top: var(--space-xs); font-weight: 600;">¡Sesión encontrada!</p>
+            <p style="font-size: var(--text-sm); color: var(--olive); margin-top: var(--space-xs); font-weight: 600;">¡Te has unido a la sesión!</p>
           </div>
 
           <div class="input-group">
-            <label for="student-name">Tu nombre (opcional)</label>
-            <input type="text" id="student-name" class="input" placeholder="Anónimo" />
+            <label for="student-name">Tu nombre (para identificarte en el aula)</label>
+            <input type="text" id="student-name" class="input" placeholder="Ej: Ana Lucía" required />
           </div>
 
           <button type="submit" class="btn btn--gold btn--lg btn--full" id="join-btn">
@@ -88,47 +89,60 @@ export function initStudentJoin() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const code = document.getElementById('code').value.trim().toUpperCase();
-    const name = document.getElementById('student-name').value.trim() || 'Anónimo';
+    const name = document.getElementById('student-name').value.trim() || 'Estudiante';
 
-    // Show loading
     const loadingEl = document.getElementById('join-loading');
     const errorEl = document.getElementById('join-error');
+    const errorText = document.getElementById('join-error-text');
     const joinBtn = document.getElementById('join-btn');
 
-    errorEl.style.display = 'none';
-    loadingEl.style.display = 'block';
-    joinBtn.disabled = true;
-    joinBtn.textContent = 'Buscando...';
+    if (errorEl) errorEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (joinBtn) {
+      joinBtn.disabled = true;
+      joinBtn.textContent = 'Buscando...';
+    }
 
     let session = null;
 
     try {
-      // Use async version that checks Supabase first
-      session = await joinSessionAsync(code);
+      if (code.length === 6) {
+        session = await joinSensemakingSession(code, name);
+      } else {
+        session = await joinSessionAsync(code);
+      }
     } catch (error) {
       console.error(error);
-      loadingEl.style.display = 'none';
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (joinBtn) {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Entrar a la sesión';
+      }
+      if (errorText) {
+        errorText.textContent = getOnlineSessionErrorMessage(error, 'unirte a la sesión');
+      }
+      if (errorEl) errorEl.style.display = 'flex';
+      return;
+    }
+
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (joinBtn) {
       joinBtn.disabled = false;
       joinBtn.textContent = 'Entrar a la sesión';
-      alert(getOnlineSessionErrorMessage(error, 'consultar las sesiones en línea'));
-      return;
     }
-
-    loadingEl.style.display = 'none';
-    joinBtn.disabled = false;
-    joinBtn.textContent = 'Entrar a la sesión';
 
     if (!session) {
-      errorEl.style.display = 'flex';
-      errorEl.classList.remove('shake');
-      void errorEl.offsetWidth;
-      errorEl.classList.add('shake');
+      if (errorEl) {
+        errorEl.style.display = 'flex';
+        errorEl.classList.remove('shake');
+        void errorEl.offsetWidth;
+        errorEl.classList.add('shake');
+      }
       return;
     }
 
-    errorEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
 
-    // Show success feedback before redirecting
     const successEl = document.getElementById('join-success');
     if (successEl) {
       successEl.style.display = 'block';
@@ -139,13 +153,10 @@ export function initStudentJoin() {
     setStudentName(name);
     getStudentId();
 
-    // Brief delay for success animation
+    const joinCode = session.join_code || session.code || code;
+
     setTimeout(() => {
-      if (session.activeTools && session.activeTools.includes('gnosis')) {
-        window.location.hash = `/tool/gnosis`;
-      } else {
-        window.location.hash = `/session/${code}`;
-      }
-    }, 600);
+      window.location.hash = `/session/${joinCode}`;
+    }, 500);
   });
 }
