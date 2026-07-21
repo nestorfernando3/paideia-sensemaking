@@ -95,6 +95,9 @@ export function renderHome() {
       </div>
 
       <div class="content-container content-container--home" style="margin-bottom: var(--space-2xl);">
+        <a href="#/demo" class="btn btn--gold btn--lg btn--full" style="margin-bottom:var(--space-lg);">
+          ▶ Abrir demo guiado de Build Week
+        </a>
         <div class="actions-grid">
           <a class="action-card animate-card-enter stagger-1" href="#/join">
             <div class="action-card__icon">🎓</div>

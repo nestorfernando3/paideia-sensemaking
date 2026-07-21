@@ -20,6 +20,7 @@ import { renderAnamnesis, initAnamnesis } from './views/anamnesis.js';
 import { renderGuiaDocente, initGuiaDocente } from './views/guia-docente.js';
 import { renderGuiaEstudiante, initGuiaEstudiante } from './views/guia-estudiante.js';
 import { renderTeacherJoin, initTeacherJoin } from './views/teacherJoin.js';
+import { renderDemo, initDemo } from './views/demo.js';
 import { clearRouteSubscriptions } from './utils/live.js';
 
 const app = document.getElementById('app');
@@ -30,6 +31,7 @@ const routes = {
     '/new-session': { render: renderNewSession, init: initNewSession },
     '/join': { render: renderStudentJoin, init: initStudentJoin },
     '/teacher-join': { render: renderTeacherJoin, init: initTeacherJoin },
+    '/demo': { render: renderDemo, init: initDemo },
     '/guia-docente': { render: renderGuiaDocente, init: initGuiaDocente },
     '/guia-estudiante': { render: renderGuiaEstudiante, init: initGuiaEstudiante },
 };
