@@ -1,12 +1,9 @@
 // ==========================================================================
-// PAIDEIA — Teacher Join View
-// El docente se une a una sesión existente con clave
+// PAIDEIA — Legacy Teacher Join View
+// El acceso docente se verifica por membresía en Supabase, nunca por clave local.
 // ==========================================================================
 
 import { renderHeader } from '../components/header.js';
-import { joinSessionAsync, setCurrentSession } from '../utils/session.js';
-import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
-
 export function renderTeacherJoin() {
     return `
     ${renderHeader()}
@@ -19,96 +16,21 @@ export function renderTeacherJoin() {
       <div class="tool-view">
         <div class="tool-view__header animate-fade-in">
           <div class="tool-view__greek-letter">Ω</div>
-          <h2 class="tool-view__name">Acceso Docente</h2>
-          <p class="tool-view__concept">Reingresar a una sesión activa</p>
+          <h2 class="tool-view__name">Acceso docente seguro</h2>
+          <p class="tool-view__concept">El rol docente se valida con tu sesión y membresía en línea</p>
         </div>
 
-        <form id="teacher-join-form" class="animate-slide-up">
-          <div class="input-group">
-            <label for="session-code">Código de sesión</label>
-            <input 
-              type="text" 
-              id="session-code" 
-              class="input code-input" 
-              placeholder="ABCD" 
-              maxlength="4" 
-              pattern="[A-Za-z]{4}"
-              autocomplete="off"
-              required 
-            />
-          </div>
-
-          <div class="input-group">
-            <label for="teacher-password">Clave de docente</label>
-            <input 
-              type="password" 
-              id="teacher-password" 
-              class="input" 
-              placeholder="Clave maestra" 
-              required 
-            />
-          </div>
-
-          <button type="submit" class="btn btn--gold btn--lg btn--full" id="teacher-join-btn" style="margin-top: var(--space-lg);">
-            Entrar al panel
-          </button>
-        </form>
+        <div class="animate-slide-up" style="text-align: center;">
+          <p>Continúa por el flujo Sensemaking. La base de datos habilitará los controles docentes únicamente si eres miembro docente de la sesión.</p>
+          <a href="#/new-session" class="btn btn--gold btn--lg btn--full" style="margin-top: var(--space-lg);">
+            Ir a sesiones Sensemaking
+          </a>
+        </div>
       </div>
     </main>
   `;
 }
 
 export function initTeacherJoin() {
-    const form = document.getElementById('teacher-join-form');
-    const btn = document.getElementById('teacher-join-btn');
-
-    if (form) {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const codeInput = document.getElementById('session-code');
-            const passwordInput = document.getElementById('teacher-password');
-
-            const code = codeInput.value.trim().toUpperCase();
-            const password = passwordInput.value.trim();
-
-            if (code.length !== 4) {
-                alert('El código debe tener 4 letras');
-                return;
-            }
-
-            if (password !== 'paideia') {
-                alert('⛔ Clave incorrecta');
-                return;
-            }
-
-            // Disabled button
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = '⏳ Verificando...';
-            }
-
-            try {
-                const session = await joinSessionAsync(code);
-                if (session) {
-                    // Success! Set as teacher
-                    setCurrentSession(session, 'teacher');
-                    window.location.hash = `/session/${code}`;
-                } else {
-                    alert('Sesión no encontrada en la nube');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.textContent = 'Entrar al panel';
-                    }
-                }
-            } catch (err) {
-                console.error(err);
-                alert(getOnlineSessionErrorMessage(err, 'consultar la sesión en línea'));
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = 'Entrar al panel';
-                }
-            }
-        });
-    }
+    // La ruta se conserva para enlaces antiguos; no autentica ni asigna roles.
 }

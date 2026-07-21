@@ -62,10 +62,16 @@ const SESSION_KEY = 'paideia_current_session';
 const ROLE_KEY = 'paideia_current_role';
 const STUDENT_NAME_KEY = 'paideia_student_name';
 const STUDENT_ID_KEY = 'paideia_student_id';
+let verifiedSensemakingSessionId = null;
+let verifiedSensemakingRole = null;
 
 export function setCurrentSession(session, role) {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    if (role) {
+    verifiedSensemakingSessionId = null;
+    verifiedSensemakingRole = null;
+    if (session?.id) {
+        sessionStorage.removeItem(ROLE_KEY);
+    } else if (role) {
         sessionStorage.setItem(ROLE_KEY, role);
     }
 }
@@ -87,6 +93,12 @@ export function getCurrentSession() {
 }
 
 export function getCurrentRole() {
+    const session = readStoredSession();
+    if (session?.id) {
+        return verifiedSensemakingSessionId === session.id
+            ? verifiedSensemakingRole
+            : null;
+    }
     return sessionStorage.getItem(ROLE_KEY) || null;
 }
 
@@ -96,10 +108,10 @@ export function getCurrentRole() {
  * @returns {Promise<'teacher' | 'student' | null>}
  */
 export async function deriveUserRole(sessionId) {
-    if (!supabase || !sessionId) return getCurrentRole();
+    if (!supabase || !sessionId) return clearVerifiedRole();
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return getCurrentRole();
+        if (!user) return clearVerifiedRole();
 
         const { data, error } = await supabase
             .from('ps_members')
@@ -108,11 +120,15 @@ export async function deriveUserRole(sessionId) {
             .eq('user_id', user.id)
             .maybeSingle();
 
-        if (error || !data) return getCurrentRole();
+        if (error || !['teacher', 'student'].includes(data?.role)) {
+            return clearVerifiedRole();
+        }
+        verifiedSensemakingSessionId = sessionId;
+        verifiedSensemakingRole = data.role;
         sessionStorage.setItem(ROLE_KEY, data.role);
         return data.role;
     } catch {
-        return getCurrentRole();
+        return clearVerifiedRole();
     }
 }
 
@@ -125,6 +141,23 @@ export function clearCurrentSession() {
     sessionStorage.removeItem(ROLE_KEY);
     sessionStorage.removeItem(STUDENT_NAME_KEY);
     sessionStorage.removeItem(STUDENT_ID_KEY);
+    verifiedSensemakingSessionId = null;
+    verifiedSensemakingRole = null;
+}
+
+function readStoredSession() {
+    try {
+        return JSON.parse(sessionStorage.getItem(SESSION_KEY));
+    } catch {
+        return null;
+    }
+}
+
+function clearVerifiedRole() {
+    verifiedSensemakingSessionId = null;
+    verifiedSensemakingRole = null;
+    sessionStorage.removeItem(ROLE_KEY);
+    return null;
 }
 
 // ── Student identity ──────────────────────────────────────────────────────

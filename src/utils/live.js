@@ -1,5 +1,6 @@
 import { getCurrentSession, isTeacher } from './session.js';
 import { subscribeSession, subscribeToolEntries } from './storage.js';
+import { subscribeToSession } from '../services/sessionService.js';
 
 let routeCleanups = [];
 
@@ -23,6 +24,13 @@ export function registerRouteSubscription(cleanup) {
 export function initLiveSessionSync() {
     const session = getCurrentSession();
     if (!session) return;
+
+    if (session.id && session.join_code) {
+        registerRouteSubscription(
+            subscribeToSession(session.id, refreshRoute)
+        );
+        return;
+    }
 
     let isFirstPayload = true;
     registerRouteSubscription(

@@ -5,9 +5,8 @@
 
 import { renderHeader } from '../components/header.js';
 import { getToolById } from '../components/toolCard.js';
-import { getCurrentSession, getCurrentRole, isTeacher, setCurrentSession, generateGreekCode, clearCurrentSession, endSession, getStudentName, deriveUserRole } from '../utils/session.js';
-import { getSession, getAllToolEntriesAsync } from '../utils/storage.js';
-import { getSensemakingSession } from '../services/sessionService.js';
+import { getCurrentSession, getCurrentRole, setCurrentSession, generateGreekCode, clearCurrentSession, endSession, getStudentName, deriveUserRole } from '../utils/session.js';
+import { getSession } from '../utils/storage.js';
 import { staggerChildren } from '../utils/animations.js';
 import { backend } from '../utils/backend.js';
 import { getOnlineSessionErrorMessage } from '../utils/online-errors.js';
@@ -20,8 +19,7 @@ export function renderSession(code) {
   if (!session || joinCode !== code) {
     session = getSession(code);
     if (session) {
-      const existingRole = getCurrentRole();
-      setCurrentSession(session, existingRole || 'student');
+      setCurrentSession(session, 'student');
     }
   }
 
@@ -68,7 +66,7 @@ export function renderSession(code) {
               <span class="badge ${session.status === 'ended' || session.active === false ? 'badge--olive' : 'badge--gold'}">
                 ${session.status === 'ended' || session.active === false ? '<span>⏹</span> Sesión finalizada' : '<span class="live-badge__dot"></span> Sesión activa'}
               </span>
-              ${role === 'teacher' ? `<span class="badge badge--aegean">Docente</span>` : `<span class="badge badge--aegean">Estudiante</span>`}
+              ${role ? `<span class="badge badge--aegean">${role === 'teacher' ? 'Docente' : 'Estudiante'}</span>` : '<span class="badge badge--olive">Verificando acceso…</span>'}
             </div>
 
             <div class="session-code-display session-code-display--panel">
@@ -83,8 +81,10 @@ export function renderSession(code) {
             ${session.grade_level ? `<p style="font-size: var(--text-sm); color: var(--color-gold); margin-top: 4px;">Grado: ${session.grade_level}</p>` : ''}
             ${role === 'student' && studentName ? `
               <p class="session-dashboard__subtitle">👋 Hola, <strong>${studentName}</strong>. Avanza por la actividad cuando el docente active cada etapa.</p>
-            ` : `
+            ` : role === 'teacher' ? `
               <p class="session-dashboard__subtitle">Comparte este código con tus estudiantes para que entren al flujo pedagógico.</p>
+            ` : `
+              <p class="session-dashboard__subtitle">Validando tu membresía en la sesión…</p>
             `}
           </div>
 
@@ -120,7 +120,7 @@ export function renderSession(code) {
         <section class="session-dashboard__waiting">
           <div class="session-dashboard__waiting-copy">
             <p class="session-dashboard__waiting-title">Esperando respuestas de los estudiantes...</p>
-            <p class="session-dashboard__waiting-subtitle">${role === 'teacher' ? 'Observa la participación y activa las etapas del proceso.' : 'Espera a que el docente habilite el siguiente momento.'}</p>
+            <p class="session-dashboard__waiting-subtitle">${role === 'teacher' ? 'Observa la participación y activa las etapas del proceso.' : role === 'student' ? 'Espera a que el docente habilite el siguiente momento.' : 'Los controles aparecerán al verificar tu acceso.'}</p>
           </div>
         </section>
 
@@ -168,7 +168,12 @@ export async function initSession() {
 
   const session = getCurrentSession();
   if (session && session.id) {
-    await deriveUserRole(session.id);
+    const previousRole = getCurrentRole();
+    const role = await deriveUserRole(session.id);
+    if (role !== previousRole) {
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      return;
+    }
   }
 
   const endBtn = document.getElementById('end-session-btn');

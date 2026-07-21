@@ -112,8 +112,8 @@ export function renderHome() {
         </div>
 
         <div class="home-secondary-actions">
-          <a href="#/teacher-join" class="link-subtle">
-            ¿Ya tienes sesión? Reingresar
+          <a href="#/new-session" class="link-subtle">
+            Crear otra sesión docente
           </a>
           <a href="#/guia-docente" class="btn btn--ghost btn--sm">
             📖 Guía del Docente
